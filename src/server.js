@@ -27,10 +27,37 @@ function escHtml(s) {
 function approvedLinks() {
   return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC").all();
 }
-// 首页页脚文字友链（收录机器人可见；后台友链管理里维护）
-function footerLinksHtml(links) {
-  return links.map(l => `<a href="${escHtml(l.url)}" target="_blank" title="${escHtml(l.name)}">${escHtml(l.name)}</a>`).join('\n        ');
+// 首页"友情链接"分区（复用站内 site-card 卡片样式，服务端渲染对收录机器人可见）
+function homeLinksSection(links) {
+  if (!links.length) return '';
+  const cards = links.map(l => {
+    const d = linkDomain(l.url) || '';
+    const intro = escHtml(l.description || l.title || '友情链接站点');
+    return `<a class="site-card" href="${escHtml(l.url)}" target="_blank" rel="nofollow noopener" style="text-decoration:none;color:inherit">` +
+      `<div class="site-card-head"><div class="site-logo" style="background:#eaf3ff">🔗` +
+      `<img class="site-logo-img" src="/api/favicon?domain=${encodeURIComponent(d)}" onerror="this.remove()" alt="" /></div>` +
+      `<div style="min-width:0"><div class="site-name">${escHtml(l.name)}</div></div></div>` +
+      `<div class="site-intro">${intro}</div></a>`;
+  }).join('\n');
+  return `<div class="section">
+        <div class="section-head">
+          <div class="section-title">🔗 友情链接</div>
+          <a class="section-more" href="/directory">更多友链 →</a>
+        </div>
+        <div class="grid-sites">${cards}</div>
+      </div>`;
 }
+
+// 首页：把审核通过的友链以"友情链接"分区形式注入（后台可管理；对收录机器人可见）
+app.get('/', (req, res) => {
+  try {
+    let html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    html = html.replace('<!--FRIEND_LINKS_SECTION-->', homeLinksSection(approvedLinks()));
+    res.type('html').send(html);
+  } catch (e) {
+    res.status(500).send('server error');
+  }
+});
 // 目录页大卡片（仿首页"推荐站点"样式）
 function dirCards(links) {
   return links.map(l => {
@@ -42,21 +69,6 @@ function dirCards(links) {
       `<div class="dcard-intro">${intro}</div></a>`;
   }).join('\n');
 }
-
-// 首页：把审核通过的友链以服务端形式注入页脚（后台可管理；对收录机器人可见）
-app.get('/', (req, res) => {
-  try {
-    let html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-    const links = approvedLinks();
-    const foot = links.length
-      ? footerLinksHtml(links)
-      : `<a href="/directory">+ 申请收录</a>`;
-    html = html.replace('<!--FRIEND_LINKS-->', foot);
-    res.type('html').send(html);
-  } catch (e) {
-    res.status(500).send('server error');
-  }
-});
 
 // 独立友链目录页：全部友链 + 自助申请（服务端渲染）
 app.get('/directory', (req, res) => {
