@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>卡券导航 - 虚拟/卡券一站式货源平台导航与比价工具</title>
+<meta name="description" content="卡券货源导航站：仅收录第三方发卡站点，提供站点导航与一键比价工具。本站不卖货、无下单、无支付、不接触卡密交易，所有交易均跳转第三方网站。">
+<meta name="keywords" content="卡券导航,发卡站导航,卡密货源,比价,货源导航">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232b7fff'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white'>卡</text></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ========== 顶部导航 ========== -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="logo" href="#/"><span class="logo-mark">卡</span>卡券导航</a>
+      <div class="nav-links">
+        <a href="#/" :class="{active: route==='home'}">首页</a>
+        <a href="#/sites" :class="{active: route==='sites'}">全部站点</a>
+      </div>
+      <div class="nav-search">
+        <input class="search-input" v-model="navKw" placeholder="搜索站点 / 关键词" @keyup.enter="goSites">
+        <button class="btn btn-primary" @click="goHomeSearch"><span>批量查价</span>⇄</button>
+        <a class="btn btn-ghost" href="#/submit"><span>提交站点</span>＋</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <!-- ========== 首页 ========== -->
+    <template v-if="route==='home'">
+      <!-- 顶部横幅广告位（后台可管理） -->
+      <div class="top-banner" v-if="home.banners.length">
+        <a class="top-banner-inner" :href="home.banners[0].link" target="_blank" rel="nofollow noopener">
+          <span class="banner-tag">{{ home.banners[0].tag }}</span>
+          <span class="banner-text">{{ home.banners[0].text }}</span>
+          <span class="banner-go btn btn-primary">去查看 →</span>
+        </a>
+      </div>
+
+      <!-- 主视觉 + 实时查价 -->
+      <div class="hero">
+        <div class="hero-main">
+          <div class="hero-blob b1"></div><div class="hero-blob b2"></div>
+          <div class="hero-badge">🔥 全站数据实时更新中</div>
+          <div class="hero-title">发现更可靠的<span class="hl">卡券货源</span></div>
+          <div class="hero-sub">实时查价 · 优质货源 · 安全可靠 · 高效对接</div>
+          <div class="hero-desc">输入商品名称，一键获取所有开启比价站点的实时报价（本站仅导航比价，不参与任何交易）</div>
+          <div class="hero-search">
+            <span class="hero-search-icon">🔍</span>
+            <input v-model.trim="kw" placeholder="输入商品名称，实时查询站点报价…" @keyup.enter="doHomeCompare">
+            <button class="btn btn-primary" :disabled="hq.loading" @click="doHomeCompare">{{ hq.loading ? '查询中…' : '实时查价' }}</button>
+          </div>
+          <div class="hot-kw">
+            <span>热门搜索：</span>
+            <a v-for="h in hotKws" :key="h" href="javascript:;" @click="hotSearch(h)">{{ h }}</a>
+          </div>
+
+          <!-- 全站实时数据 -->
+          <div class="stats-row">
+            <div class="stat-item">
+              <span class="dot-live"></span>
+              <div><b>{{ stats.online }}</b><small>实时在线</small></div>
+            </div>
+            <div class="stat-item">
+              <div><b>{{ fmt(stats.today_pv) }}</b><small>今日访问</small></div>
+            </div>
+            <div class="stat-item">
+              <div><b>{{ fmt(stats.total_pv) }}</b><small>累计访问</small></div>
+            </div>
+            <div class="stat-item">
+              <div><b>{{ home.total || 0 }}</b><small>收录站点</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 实时站点报价结果 -->
+      <div class="section" v-if="hq.loading || hq.done">
+        <div class="section-head">
+          <div class="section-title">⚡ 实时站点报价</div>
+          <span class="page-sub" v-if="hq.summary">
+            关键词「{{ hq.kw }}」 · 成功 {{ hq.summary.ok }}/{{ hq.summary.total }} 站
+            <a v-if="hq.cached" style="color:#d48806">（{{ cacheMin }} 分钟内缓存）</a>
+          </span>
+        </div>
+
+        <div class="loading" v-if="hq.loading"><span class="spinner"></span><br>正在遍历各开启比价的站点，请稍候…</div>
+
+        <template v-else>
+          <div class="table-wrap" v-if="hq.rows.length">
+            <table class="quote-table">
+              <thead>
+                <tr><th style="width:52px">排名</th><th>商品名称</th><th>价格</th><th>所属站点</th><th style="width:86px">操作</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(it, i) in hq.rows" :key="i" :class="{ 'best-row': i === 0 }">
+                  <td><span class="rank" :class="'rank-' + (i + 1)">{{ i + 1 }}</span></td>
+                  <td class="q-title">{{ it.title }}</td>
+                  <td><span class="price">{{ it.priceNum > 0 ? '¥' + it.priceNum.toFixed(2) : it.price }}</span></td>
+                  <td>
+                    <span class="site-badge">{{ it.site_name }}</span>
+                    <span class="site-system">{{ it.system }}</span>
+                  </td>
+                  <td><a class="btn btn-primary btn-go" :href="it.url" target="_blank" rel="nofollow noopener" @click="addClick(it.site_id)">前往</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="loading" v-else>暂无报价结果：可能暂无站点开启比价，或各站点暂时无法抓取。</div>
+
+          <div class="quote-fails" v-if="hq.fails.length">
+            <span class="fail-chip" v-for="f in hq.fails" :key="f.site_id">😔 {{ f.site_name }}：该站点暂时无法抓取价格</span>
+          </div>
+
+          <div class="disclaimer compare-notice">
+            <b>⚠ 价格说明：</b>
+            <span>价格抓取自第三方公开网页，仅供参考，实际价格以目标网站为准。本站不提供下单功能，点击"前往"将跳转第三方网站，交易与安全请自行负责。</span>
+          </div>
+        </template>
+      </div>
+
+      <!-- 公告栏 -->
+      <div class="notice-bar" v-if="home.announcements.length">
+        <span class="notice-label">📢 公告</span>
+        <span class="notice-scroll" @click="showNotice(home.announcements[0])">{{ home.announcements[0].title }}</span>
+        <a class="notice-more" href="#/links">查看详情 ▾</a>
+      </div>
+
+      <!-- 推荐站点（横向滚动） -->
+      <div class="section" v-if="home.recommended.length">
+        <div class="section-head">
+          <div class="section-title">⭐ 推荐站点</div>
+        </div>
+        <div class="scroll-x">
+          <div class="site-card" v-for="s in home.recommended" :key="s.id" @click="goSite(s.id)">
+            <div class="site-card-head">
+              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+              <div style="min-width:0">
+                <div class="site-name">{{ s.name }}</div>
+                <span class="site-system">{{ s.system }}</span>
+              </div>
+            </div>
+            <div class="site-intro">{{ s.intro || '暂无简介' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡券货源列表 -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">🎫 卡券货源</div>
+          <a class="section-more" href="#/sites">更多站点 →</a>
+        </div>
+        <div class="grid-sites">
+          <div class="site-card" v-for="s in home.featured" :key="s.id" @click="goSite(s.id)">
+            <div class="site-card-head">
+              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+              <div style="min-width:0">
+                <div class="site-name">{{ s.name }}</div>
+                <span class="site-system">{{ s.system }}</span>
+              </div>
+            </div>
+            <div class="site-intro">{{ s.intro || '暂无简介' }}</div>
+            <div class="site-card-foot">
+              <span class="site-clicks">🔥 {{ fmt(s.clicks) }} 次浏览</span>
+              <span class="site-tags">
+                <span class="tag tag-rec" v-if="s.featured">置顶推荐</span>
+                <span class="tag tag-crawl" v-if="s.crawl_enabled">支持比价</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 全站免责提示 -->
+      <div class="disclaimer">
+        <b>⚠ 免责声明：</b>
+        <span>本站为<b>第三方发卡站点导航与比价工具</b>，不出售任何商品，不提供下单、支付、卡密发货服务，不参与任何卡密交易。所有商品与交易行为均发生在各第三方网站，与本站无关。请自行甄别站点可靠性，交易风险自负。<a href="javascript:;" @click="showDisclaimer">查看完整声明 →</a></span>
+      </div>
+    </template>
+
+    <!-- ========== 全部站点页 ========== -->
+    <template v-if="route==='sites'">
+      <div class="page-head">
+        <div class="page-title">全部站点</div>
+        <div class="page-sub">共收录 {{ sitesTotal }} 个第三方发卡站点（仅导航展示，不参与交易）</div>
+      </div>
+      <div class="filter-bar">
+        <input class="search-input" style="width:220px" v-model.trim="sitesQ" placeholder="搜索站点名称/简介/域名" @input="loadSites" @keyup.enter="loadSites">
+        <button class="btn btn-primary" @click="loadSites">搜索</button>
+        <span style="width:10px"></span>
+        <button class="chip" :class="{active: sitesSys===''}" @click="setSys('')">全部系统</button>
+        <button class="chip" v-for="sys in systems" :key="sys" :class="{active: sitesSys===sys}" @click="setSys(sys)">{{ sys }}</button>
+      </div>
+      <div class="loading" v-if="sitesLoading"><span class="spinner"></span><br>加载中…</div>
+      <div class="grid-sites" v-else-if="sitesList.length">
+        <div class="site-card" v-for="s in sitesList" :key="s.id" @click="goSite(s.id)">
+          <div class="site-card-head">
+            <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+            <div style="min-width:0">
+              <div class="site-name">{{ s.name }}</div>
+              <span class="site-system">{{ s.system }}</span>
+            </div>
+          </div>
+          <div class="site-intro">{{ s.intro || '暂无简介' }}</div>
+          <div class="site-tags">
+            <span class="tag tag-rec" v-if="s.featured">置顶推荐</span>
+            <span class="tag" v-if="s.sponsored">赞助站点</span>
+            <span class="tag tag-crawl" v-if="s.crawl_enabled">支持比价</span>
+          </div>
+        </div>
+      </div>
+      <div class="loading" v-else>暂无符合条件的站点</div>
+      <div style="text-align:center;margin:18px 0" v-if="sitesList.length && sitesList.length < sitesTotal">
+        <button class="btn btn-ghost" @click="sitesPage++; loadSites()">加载更多</button>
+      </div>
+      <div class="disclaimer"><b>⚠ 提示：</b><span>以下均为第三方网站，本站仅提供导航，交易请在目标网站自行完成并注意风险。</span></div>
+    </template>
+
+    <!-- ========== 站点详情页 ========== -->
+    <template v-if="route==='site'">
+      <div class="loading" v-if="!site"><span class="spinner"></span><br>加载中…</div>
+      <template v-else>
+        <div class="detail-card" style="margin-top:20px">
+          <div class="detail-head">
+            <div class="detail-logo" :style="{background:site.logo_color}">{{ site.name[0] }}<img class="site-logo-img detail-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(site.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+            <div style="flex:1;min-width:0">
+              <div class="detail-title">{{ site.name }}
+                <span class="site-system">{{ site.system }}</span>
+                <span class="tag tag-crawl" v-if="site.crawl_enabled">已开启比价抓取</span>
+                <span class="tag" v-else>未开启比价抓取</span>
+              </div>
+              <div class="page-sub">{{ site.domain }}</div>
+            </div>
+          </div>
+          <div class="detail-desc"><b>站点简介：</b>{{ site.intro || '暂无简介' }}</div>
+          <div class="detail-desc"><b>站点介绍：</b>{{ site.description || site.intro || '暂无详细介绍' }}</div>
+          <div class="detail-warn" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <span class="click-pill"><small>点击量</small><b>{{ fmt(site.clicks) }}</b></span>
+            <a class="btn btn-primary btn-visit" :href="siteUrl(site.domain)" target="_blank" rel="nofollow noopener" @click="addClick(site.id)">🚀 访问站点</a>
+            <a class="btn btn-ghost" v-if="site.friend_link" :href="site.friend_link" target="_blank" rel="nofollow noopener">友链地址</a>
+          </div>
+          <div class="disclaimer detail-warn">
+            <b>⚠ 免责声明：</b>
+            <span>{{ site.name }} 为<b>第三方发卡网站</b>，与本站无任何隶属或合作关系。本站仅提供导航展示{{ site.crawl_enabled ? '与价格参考信息抓取' : '' }}，不参与其任何交易、不承担其商品质量/发货/售后责任。请在交易前自行核实对方资质与口碑。</span>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- ========== 比价结果页 ========== -->
+    <template v-if="route==='compare'">
+      <div class="page-head">
+        <div class="page-title">一键比价结果</div>
+        <div class="page-sub">关键词「{{ compareKw }}」 · 已抓取 {{ compare.summary.ok }}/{{ compare.summary.total }} 个开启比价的站点
+          <a v-if="compare.cached" style="color:#d48806">（缓存结果，{{ cacheMin }} 分钟内有效）</a>
+        </div>
+      </div>
+      <div class="disclaimer compare-notice">
+        <b>⚠ 价格说明：</b>
+        <span>价格抓取自第三方公开网页，仅供参考，实际价格以目标网站为准。本站不提供下单功能，点击"前往"将跳转至第三方网站，交易与安全请自行负责。</span>
+      </div>
+
+      <div class="loading" v-if="comparing"><span class="spinner"></span><br>正在遍历各站点比价，请稍候…</div>
+
+      <template v-else>
+        <div class="table-wrap" v-for="r in compare.results" :key="r.site_id" style="margin-bottom:14px">
+          <table>
+            <thead>
+              <tr>
+                <th colspan="4" style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:800;color:var(--text)">🛒 {{ r.site_name }}</span>
+                  <span class="site-system">{{ r.system }}</span>
+                  <span style="font-size:11px;color:var(--text-2)">{{ r.cost_ms }}ms</span>
+                  <a style="margin-left:auto" :href="home.recommended && siteLink(r.site_id)" >站点详情 →</a>
+                </th>
+              </tr>
+              <tr v-if="r.ok"><th>商品名称</th><th>价格</th><th>库存</th><th>操作</th></tr>
+            </thead>
+            <tbody v-if="r.ok">
+              <tr v-for="(it, i) in r.items" :key="i">
+                <td>{{ it.title }}</td>
+                <td><span class="price">{{ it.price }}</span></td>
+                <td>{{ it.stock }}</td>
+                <td>
+                  <a class="btn btn-primary" style="height:28px;font-size:12px" :href="it.url || siteHomeUrl(r.site_id)" target="_blank" rel="nofollow noopener" @click="addClick(r.site_id)">前往</a>
+                </td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr class="fail-row"><td colspan="4">😔 该站点暂时无法抓取价格 —— {{ r.msg }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="loading" v-if="!compare.results || !compare.results.length">当前没有站点开启比价抓取，请在后台开启。</div>
+      </template>
+    </template>
+
+    <!-- ========== 提交站点页 ========== -->
+    <template v-if="route==='submit'">
+      <div class="page-head">
+        <div class="page-title">提交站点收录</div>
+        <div class="page-sub">站长自助提交，审核通过后展示（本站仅收录导航，不参与交易）</div>
+      </div>
+      <div class="form-card">
+        <div class="form-item"><label><span class="req">*</span> 站点名称</label><input v-model.trim="form.name" maxlength="50" placeholder="如：XX数卡"></div>
+        <div class="form-item"><label><span class="req">*</span> 网站域名</label><input v-model.trim="form.domain" maxlength="200" placeholder="如：www.example.com" @blur="detectSystem"><div class="form-tips">{{ detectMsg || '填写域名后将自动识别发卡系统' }}</div></div>
+        <div class="form-item"><label>站点简介</label><textarea v-model.trim="form.intro" maxlength="500" placeholder="一句话介绍你的站点主营品类"></textarea></div>
+        <div class="form-item"><label><span class="req">*</span> 发卡系统</label>
+          <select v-model="form.system"><option v-for="s in systems" :key="s">{{ s }}</option></select>
+        </div>
+        <div class="form-item"><label>友链地址</label><input v-model.trim="form.friend_link" maxlength="200" placeholder="https://（选填，需先做好本站友链）"></div>
+        <div class="form-item"><label><span class="req">*</span> 联系方式</label><input v-model.trim="form.contact" maxlength="100" placeholder="QQ / 微信 / TG / 邮箱"></div>
+        <button class="btn btn-primary btn-block" :disabled="submitting" @click="submitSite">{{ submitting ? '提交中…' : '提交收录申请' }}</button>
+        <div class="form-tips" style="margin-top:10px">⚠ 提交即表示同意《收录规则》：站点须合法合规经营；出现跑路、售假、诈骗等行为将被加入黑名单并公示。</div>
+      </div>
+    </template>
+
+    <!-- ========== 友链页 ========== -->
+    <template v-if="route==='links'">
+      <div class="page-head">
+        <div class="page-title">友情链接</div>
+        <div class="page-sub">收录网站只需做上本站链接，系统检测到回链后自动通过审核</div>
+      </div>
+
+      <!-- 自助申请友链 -->
+      <div class="detail-card link-apply">
+        <div class="section-title" style="margin-bottom:12px">✏️ 提交网址</div>
+        <div class="link-row">
+          <input class="search-input" style="flex:1" v-model.trim="linkForm.url" placeholder="https://你的网站网址" @keyup.enter="fetchTdk">
+          <button class="btn btn-primary" :disabled="tdkLoading" @click="fetchTdk">{{ tdkLoading ? '获取中…' : '获取TDK' }}</button>
+        </div>
+        <div class="link-tip" :class="tdkTip.ok ? 'tip-ok' : 'tip-warn'" v-if="tdkTip">{{ tdkTip.text }}</div>
+        <div class="link-row"><label>网站名称</label><input class="search-input" style="flex:1" v-model.trim="linkForm.name" maxlength="50" placeholder="网站名称"></div>
+        <div class="link-row"><label>关键词</label><input class="search-input" style="flex:1" v-model.trim="linkForm.keywords" maxlength="200" placeholder="选填，英文逗号分隔"></div>
+        <div class="link-row"><label>网站简介</label><textarea class="search-input" style="flex:1;height:64px;resize:vertical" v-model.trim="linkForm.description" maxlength="300" placeholder="选填，一句话介绍你的网站"></textarea></div>
+        <button class="btn btn-primary" style="width:100%" :disabled="linkSubmitting" @click="applyLink">{{ linkSubmitting ? '提交中…' : '立即提交' }}</button>
+      </div>
+
+      <div class="grid-sites">
+        <a class="site-card" v-for="l in links" :key="l.id" :href="l.url" target="_blank" rel="nofollow noopener" style="text-decoration:none">
+          <div class="site-card-head">
+            <div class="site-logo" style="background:#eaf3ff">🔗<img class="site-logo-img" :src="linkFavicon(l.url)" @error="e=>e.target.remove()" alt="" /></div>
+            <div class="site-name">{{ l.name }}</div>
+          </div>
+          <div class="site-intro">{{ l.description || l.title || l.url }}</div>
+        </a>
+      </div>
+      <div class="loading" v-if="!links.length">暂无友链，快来抢占第一位</div>
+
+      <div class="section" v-if="home.announcements.length">
+        <div class="section-head"><div class="section-title">📢 站点公告</div></div>
+        <div class="detail-card" v-for="a in home.announcements" :key="a.id" style="margin-bottom:10px;cursor:pointer" @click="showNotice(a)">
+          <b>{{ a.title }}</b>
+          <div class="page-sub">{{ a.created_at }}</div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ========== 举报/反馈页 ========== -->
+    <template v-if="route==='report'">
+      <div class="page-head">
+        <div class="page-title">举报 / 意见反馈</div>
+        <div class="page-sub">发现违规站点（跑路、诈骗、售假）或对本站有建议，请在此提交</div>
+      </div>
+      <div class="form-card">
+        <div class="form-item"><label>被举报站点名称</label><input v-model.trim="report.site_name" maxlength="100" placeholder="选填"></div>
+        <div class="form-item"><label>站点网址</label><input v-model.trim="report.url" maxlength="300" placeholder="选填"></div>
+        <div class="form-item"><label><span class="req">*</span> 举报/反馈内容</label><textarea v-model.trim="report.reason" maxlength="1000" placeholder="请描述具体情况，如聊天记录、订单截图等可发邮件给站长"></textarea></div>
+        <div class="form-item"><label>联系方式</label><input v-model.trim="report.contact" maxlength="100" placeholder="选填，方便回访"></div>
+        <button class="btn btn-primary btn-block" :disabled="reporting" @click="submitReport">{{ reporting ? '提交中…' : '提交' }}</button>
+        <div class="form-tips" style="margin-top:10px">⚠ 恶意举报将被记录并拉黑。黑名单站点将自动关闭收录与比价抓取并公示。</div>
+      </div>
+    </template>
+  </main>
+
+  <!-- ========== 首页友情链接墙 ========== -->
+  <template v-if="route==='home'">
+    <section class="home-links" v-if="links.length">
+      <div class="container">
+        <div class="hl-head"><span class="hl-title">🔗 友情链接</span><span class="hl-sub">与优质站点互联互通</span></div>
+        <div class="hl-grid">
+          <a class="hl-item" v-for="l in links" :key="l.id" :href="l.url" target="_blank" rel="noopener noreferrer nofollow" :title="l.name">
+            <img class="hl-fav" :src="linkFavicon(l.url)" @error="$event.target.style.display='none'" loading="lazy">
+            <span class="hl-name">{{ l.name }}</span>
+          </a>
+        </div>
+        <div class="hl-more"><a href="#/links">申请互换友链 →</a></div>
+      </div>
+    </section>
+  </template>
+
+  <!-- ========== 底部 ========== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="javascript:;" @click="showDisclaimer">免责声明</a>
+        <a href="javascript:;" @click="showPrivacy">隐私政策</a>
+        <a href="javascript:;" @click="showRules">提交收录规则</a>
+        <a href="#/links">友链页面</a>
+        <a href="#/report">意见反馈</a>
+        <a href="#/report">举报入口</a>
+        <a href="/admin.html" target="_blank">管理后台</a>
+      </div>
+      <div class="footer-copy">
+        卡券货源导航 · 仅收录第三方发卡站点 · 本站不卖货 / 无下单 / 无支付 / 不接触卡密交易，所有交易跳转第三方网站<br>
+        比价数据抓取自第三方公开网页，仅供参考，实际价格以目标网站为准
+      </div>
+    </div>
+  </footer>
+
+  <!-- 公告弹窗 -->
+  <div class="modal-mask" v-if="modal.show" @click.self="modal.show=false">
+    <div class="modal">
+      <h3>{{ modal.title }}</h3>
+      <div class="modal-body">{{ modal.body }}</div>
+      <div class="modal-foot"><button class="btn btn-primary" @click="modal.show=false">我知道了</button></div>
+    </div>
+  </div>
+
+  <!-- 全局消息 -->
+  <div class="toast" :class="{err: toastType==='err'}" v-if="toast">{{ toast }}</div>
+</div>
+
+<script src="https://registry.npmmirror.com/vue/3.4.21/files/dist/vue.global.prod.js"></script>
+<script>
+window.Vue || document.write('<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"><\/script>');
+</script>
+<script>
+const { createApp, ref, reactive, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const systems = ['卡易信', '卡商云', '卡速售', '卡卡云', '优权益'];
+    const route = ref('home');
+    const routeArg = ref('');
+    const navKw = ref('');
+    const kw = ref('');
+    const home = reactive({ banners: [], announcements: [], recommended: [], sponsored: [], featured: [] });
+    const comparing = ref(false);
+    const compareKw = ref('');
+    const compare = reactive({ results: [], summary: { total: 0, ok: 0, fail: 0 }, cached: false });
+    const cacheMin = ref(4);
+    // 首页实时站点报价
+    const hotKws = ['爱奇艺会员', '腾讯视频会员', '网易云音乐', '百度网盘', 'WPS会员', '美团外卖券'];
+    const hq = reactive({ kw: '', loading: false, done: false, rows: [], fails: [], summary: null, cached: false });
+    async function doHomeCompare() {
+      const k = kw.value.trim();
+      if (!k) return showToast('请先输入商品关键词', true);
+      hq.kw = k; hq.loading = true; hq.done = true;
+      document.querySelector('.hero-search')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      try {
+        const r = await fetch('/api/compare?kw=' + encodeURIComponent(k)).then(r => r.json());
+        const rows = [];
+        for (const res of (r.results || [])) {
+          if (res.ok) for (const it of res.items) rows.push({ ...it, site_name: res.site_name, system: res.system, site_id: res.site_id, url: it.url || siteHomeUrl(res.site_id) });
+        }
+        rows.sort((a, b) => (a.priceNum > 0 ? a.priceNum : Infinity) - (b.priceNum > 0 ? b.priceNum : Infinity));
+        hq.rows = rows;
+        hq.fails = (r.results || []).filter(x => !x.ok);
+        hq.summary = r.summary; hq.cached = r.cached;
+      } catch { showToast('比价服务暂时不可用', true); }
+      hq.loading = false;
+    }
+    function hotSearch(k) { kw.value = k; doHomeCompare(); }
+    function goHomeSearch() {
+      if (route.value !== 'home') { location.hash = '#/'; }
+      setTimeout(() => {
+        const el = document.querySelector('.hero-search input');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.focus();
+      }, 80);
+    }
+    const site = ref(null);
+    const sitesList = ref([]), sitesTotal = ref(0), sitesQ = ref(''), sitesSys = ref(''), sitesPage = ref(1), sitesLoading = ref(false);
+    const links = ref([]);
+    // ---------- 友链自助申请 ----------
+    const linkForm = reactive({ url: '', name: '', keywords: '', description: '' });
+    const tdkLoading = ref(false), tdkTip = ref(null), linkSubmitting = ref(false);
+    const linkFavicon = u => { try { return `/api/favicon?domain=${encodeURIComponent(new URL(u).hostname)}`; } catch { return ''; } };
+    async function fetchTdk() {
+      if (!linkForm.url) { tdkTip.value = { ok: false, text: '请先填写网址' }; return; }
+      tdkLoading.value = true; tdkTip.value = null;
+      try {
+        const r = await fetch('/api/links/fetch-tdk?url=' + encodeURIComponent(linkForm.url)).then(r => r.json());
+        if (r.error) { tdkTip.value = { ok: false, text: r.error }; }
+        else {
+          if (!linkForm.name) linkForm.name = (r.title || '').slice(0, 50);
+          if (!linkForm.keywords) linkForm.keywords = r.keywords || '';
+          if (!linkForm.description) linkForm.description = r.description || '';
+          tdkTip.value = { ok: true, text: 'TDK 获取成功，已自动回填，可修改后提交' };
+        }
+      } catch { tdkTip.value = { ok: false, text: '获取失败，请稍后重试' }; }
+      tdkLoading.value = false;
+    }
+    async function applyLink() {
+      if (!linkForm.url || !linkForm.name) { showToast('请填写网址和网站名称', true); return; }
+      linkSubmitting.value = true;
+      try {
+        const r = await fetch('/api/links/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(linkForm) }).then(r => r.json());
+        if (r.error) { showToast(r.error, true); }
+        else {
+          showToast(r.message, !r.ok || r.status !== 'approved');
+          if (r.status === 'approved') { linkForm.url = linkForm.name = linkForm.keywords = linkForm.description = ''; tdkTip.value = null; loadLinks(); }
+        }
+      } catch { showToast('提交失败，请稍后重试', true); }
+      linkSubmitting.value = false;
+    }
+    const form = reactive({ name: '', domain: '', intro: '', system: '卡易信', friend_link: '', contact: '' });
+    const submitting = ref(false);
+    const report = reactive({ site_name: '', url: '', reason: '', contact: '' });
+    const reporting = ref(false);
+    const toast = ref(''), toastType = ref('');
+    const modal = reactive({ show: false, title: '', body: '' });
+
+    // ---------- 访问统计 ----------
+    const stats = reactive({ online: 0, today_pv: 0, today_uv: 0, total_pv: 0, total_uv: 0 });
+    const fmt = n => (+n || 0).toLocaleString('zh-CN');
+    const VID_KEY = 'kqnav_vid';
+    let vid = localStorage.getItem(VID_KEY);
+    if (!vid) { vid = crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2); localStorage.setItem(VID_KEY, vid); }
+    async function trackVisit() { try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visitor: vid }) }); } catch (_) {} }
+    async function loadStats() { try { Object.assign(stats, await fetch('/api/stats').then(r => r.json())); } catch (_) {} }
+    function addClick(siteId) { if (siteId) fetch(`/api/sites/${siteId}/click`, { method: 'POST' }).catch(() => {}); }
+
+    let toastTimer;
+    const showToast = (msg, err) => {
+      toast.value = msg; toastType.value = err ? 'err' : '';
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.value = '', 2600);
+    };
+    const showNotice = a => { modal.title = a.title; modal.body = a.content; modal.show = true; };
+    const siteUrl = d => /^https?:/i.test(d) ? d : 'https://' + d;
+    const siteHomeUrl = id => { const s = sitesList.value.find(x => x.id === id); return s ? siteUrl(s.domain) : '#'; };
+    const siteLink = id => '#/site/' + id;
+
+    const DISCLAIMER = `【免责声明】
+
+1. 本站（卡券货源导航）是一个纯粹的第三方发卡站点"导航 + 比价"工具网站。
+2. 本站不出售任何商品，不提供下单、支付、发货（含卡密发货）功能，不接触、不存储任何卡密，不参与任何交易环节。
+3. 所有商品信息、价格、库存均抓取自各第三方发卡站的公开前台网页，仅供参考，实际以目标网站为准。
+4. 用户点击任何"前往/直达"按钮后将离开本站，进入第三方网站。第三方的商品质量、发货时效、售后服务、资金安全等均与本站无关。
+5. 第三方站点与本站无任何隶属、代理或合作关系。请用户自行甄别站点可靠性，交易风险自担。
+6. 如发现黑名单站点（违规、跑路、诈骗），请通过"举报入口"反馈，我们将及时下架并公示。`;
+
+    const PRIVACY = `【隐私政策】
+
+1. 本站不要求注册、不收集任何个人身份信息。
+2. "提交站点"表单中的联系方式仅用于收录审核沟通，不做其他用途，不向第三方提供。
+3. 比价抓取仅请求第三方网站的公开网页，不登录账号、不提交表单、不携带任何用户凭据。
+4. 本站不植入第三方统计/广告追踪脚本。
+5. 如有隐私相关问题请通过"意见反馈"联系我们。`;
+
+    const RULES = `【提交收录规则】
+
+1. 仅收录合法合规经营的第三方发卡站点，禁止收录涉黄、涉赌、涉毒、涉诈等违法违规站点。
+2. 站点需能正常访问，需使用常见发卡系统（卡易信 / 卡商云 / 卡速售 / 卡卡云 / 优权益）。
+3. 提交后由管理员人工审核，一般 1-3 个工作日，审核结果不单独通知。
+4. 审核通过后默认展示；如需置顶推荐或赞助广告位，请另行联系站长。
+5. 出现跑路、诈骗、大量售假投诉的站点将被加入黑名单：自动关闭收录展示与比价抓取，并在站内公示。
+6. 本站保留对收录申请的最终审核权与随时下架权。`;
+
+    const showDisclaimer = () => { modal.title = '免责声明'; modal.body = DISCLAIMER; modal.show = true; };
+    const showPrivacy = () => { modal.title = '隐私政策'; modal.body = PRIVACY; modal.show = true; };
+    const showRules = () => { modal.title = '提交收录规则'; modal.body = RULES; modal.show = true; };
+
+    async function loadHome() {
+      const r = await fetch('/api/home').then(r => r.json());
+      Object.assign(home, r);
+    }
+    function parseHash() {
+      const h = (location.hash || '#/').replace(/^#\/?/, '');
+      const [p, arg] = h.split('/');
+      route.value = p || 'home'; routeArg.value = arg || '';
+      if (route.value === 'home') loadHome();
+      if (route.value === 'sites') { sitesPage.value = 1; loadSites(); }
+      if (route.value === 'site') loadSite(routeArg.value);
+      if (route.value === 'links') loadLinks();
+      if (route.value === 'compare') {
+        const k = new URLSearchParams(location.hash.split('?')[1] || '').get('kw');
+        if (k) { kw.value = k; doCompare(); }
+      }
+      window.scrollTo(0, 0);
+    }
+    async function loadSites(append) {
+      sitesLoading.value = !append;
+      const r = await fetch(`/api/sites?q=${encodeURIComponent(sitesQ.value)}&system=${encodeURIComponent(sitesSys.value)}&page=${sitesPage.value}`).then(r => r.json());
+      if (append) sitesList.value.push(...r.list); else sitesList.value = r.list;
+      sitesTotal.value = r.total; sitesLoading.value = false;
+    }
+    function setSys(s) { sitesSys.value = s; sitesPage.value = 1; loadSites(); }
+    async function loadSite(id) {
+      site.value = null;
+      site.value = await fetch('/api/sites/' + id).then(r => r.json()).catch(() => null);
+    }
+    async function loadLinks() { links.value = await fetch('/api/links').then(r => r.json()); }
+    async function doCompare() {
+      if (!kw.value.trim()) return showToast('请先输入商品关键词', true);
+      compareKw.value = kw.value.trim();
+      location.hash = '#/compare?kw=' + encodeURIComponent(compareKw.value);
+      comparing.value = true;
+      try {
+        const r = await fetch('/api/compare?kw=' + encodeURIComponent(compareKw.value)).then(r => r.json());
+        Object.assign(compare, r);
+      } catch { showToast('比价服务暂时不可用', true); }
+      comparing.value = false;
+    }
+    function goCompare() { location.hash = '#/compare'; kw.value ? doCompare() : showToast('请输入商品关键词后点击立即查价', true); }
+    const goSite = id => location.hash = '#/site/' + id;
+    const goSites = () => { location.hash = '#/sites'; sitesQ.value = navKw.value; sitesPage.value = 1; loadSites(); };
+    // 域名失焦时自动识别发卡系统
+    const detectMsg = ref('');
+    let lastDetected = '';
+    async function detectSystem() {
+      const d = form.domain;
+      if (!d || d === lastDetected) return;
+      lastDetected = d;
+      detectMsg.value = '正在识别发卡系统…';
+      const r = await fetch('/api/detect-system', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain: d }) }).then(x => x.json()).catch(() => ({}));
+      detectMsg.value = r.message || '';
+      if (r.system && systems.includes(r.system)) { form.system = r.system; if (r.confident) showToast(r.message); }
+    }
+    async function submitSite() {
+      if (!form.name || !form.domain || !form.contact) return showToast('请填写必填项（带 *）', true);
+      submitting.value = true;
+      const r = await fetch('/api/submissions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json());
+      submitting.value = false;
+      if (r.error) return showToast(r.error, true);
+      showToast(r.message); Object.keys(form).forEach(k => form[k] = ''); form.system = '卡易信';
+    }
+    async function submitReport() {
+      if (!report.reason) return showToast('请填写举报/反馈内容', true);
+      reporting.value = true;
+      const r = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(report) }).then(r => r.json());
+      reporting.value = false;
+      if (r.error) return showToast(r.error, true);
+      showToast(r.message); report.site_name = report.url = report.reason = report.contact = '';
+    }
+
+    onMounted(() => {
+      window.addEventListener('hashchange', parseHash); parseHash();
+      trackVisit(); loadStats(); loadLinks();
+      setInterval(loadStats, 30000);          // 每 30 秒刷新在线人数
+    });
+
+    return {
+      systems, route, routeArg, navKw, kw, home, comparing, compareKw, compare, cacheMin, site,
+      hotKws, hq, doHomeCompare, hotSearch, goHomeSearch,
+      stats, fmt, addClick,
+      sitesList, sitesTotal, sitesQ, sitesSys, sitesLoading, links, linkForm, tdkLoading, tdkTip, linkSubmitting,
+      linkFavicon, fetchTdk, applyLink, form, submitting, report, reporting, detectMsg, detectSystem,
+      toast, modal, showToast, showNotice, showDisclaimer, showPrivacy, showRules,
+      loadSites, setSys, doCompare, goCompare, goSite, goSites, siteUrl, siteHomeUrl, siteLink, submitSite, submitReport
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

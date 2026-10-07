@@ -1,0 +1,26 @@
+# Render Blueprint —— 卡券货源导航站
+# 部署方式：本项目推送到 GitHub 后，在 dashboard.render.com 选择 "New" → "Blueprint"
+# 直接指向本仓库，Render 会按此文件自动创建 Web Service。
+# 注意：NODE_VERSION 必须 ≥ 22（项目使用 Node 内置的 node:sqlite）。
+services:
+  - type: web
+    name: kaquan-nav
+    runtime: node
+    plan: free
+    # 区域可选：oregon(美西) / frankfurt(欧洲) / singapore(亚太，国内访问更友好，但免费档可能需切换)
+    region: singapore
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMIN_USER
+        sync: false          # 部署后在 Render 后台设置
+      - key: ADMIN_PASSWORD
+        sync: false          # 部署后在 Render 后台设置（务必改成强密码）
+    # 持久磁盘：挂载到 data 目录，保证 SQLite 数据库与 favicon 缓存重启不丢
+    disk:
+      name: kaquan-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

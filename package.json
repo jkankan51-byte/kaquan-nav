@@ -1,0 +1,16 @@
+{
+  "name": "kaquan-nav",
+  "version": "1.0.0",
+  "description": "卡券货源导航站 - 仅收录第三方发卡站点，只做导航与一键比价，本站不卖货、无下单、无支付、不接触卡密交易",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>管理后台 - 卡券货源导航</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+body { background: #eef4fb; }
+.admin-wrap { max-width: 1180px; margin: 0 auto; padding: 16px 14px 40px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.admin-title { font-size: 20px; font-weight: 800; color: var(--primary); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.tab { padding: 8px 16px; border-radius: 10px 10px 0 0; background: #dde9f7; color: var(--text-2); cursor: pointer; font-weight: 600; font-size: 13px; }
+.tab.active { background: #fff; color: var(--primary); box-shadow: var(--shadow); }
+.admin-panel { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; overflow-x: auto; }
+.op-btn { padding: 4px 10px; border-radius: 6px; font-size: 12px; margin-right: 6px; margin-bottom: 4px; display: inline-block; }
+.op-edit { background: var(--primary-light); color: var(--primary); cursor: pointer; }
+.op-del { background: #fdeaea; color: var(--danger); cursor: pointer; }
+.op-ok { background: #e9f9f1; color: var(--ok); cursor: pointer; }
+.op-warn { background: #fff7e8; color: #d48806; cursor: pointer; }
+.sw { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.stat-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat-card { flex: 1; min-width: 140px; background: linear-gradient(135deg,#eaf4ff,#fff); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+.stat-card b { font-size: 22px; color: var(--primary); display: block; }
+.stat-card span { font-size: 12px; color: var(--text-2); }
+.login-box { max-width: 360px; margin: 90px auto; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 30px; }
+.login-box h2 { text-align: center; color: var(--primary); margin-bottom: 18px; }
+.inline-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; margin-bottom: 14px; padding: 12px; background: var(--bg); border-radius: 10px; }
+.inline-form input, .inline-form select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; width: 100%; }
+.inline-form label { font-size: 11px; color: var(--text-2); display: block; margin-bottom: 3px; }
+@media (max-width: 640px) { .tab { padding: 7px 10px; font-size: 12px; } }
+/* 友链待审标记 */
+.tag-warn { color: #b26a00; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- 登录 -->
+  <div class="login-box" v-if="!token">
+    <h2>🎫 卡券导航 · 管理后台</h2>
+    <div class="form-item"><label>账号</label><input v-model.trim="loginName" @keyup.enter="doLogin"></div>
+    <div class="form-item"><label>密码</label><input type="password" v-model="loginPass" @keyup.enter="doLogin"></div>
+    <button class="btn btn-primary btn-block" @click="doLogin">登 录</button>
+    <div class="toast" :class="{err:toastType==='err'}" v-if="toast" style="top:auto;bottom:30px">{{ toast }}</div>
+  </div>
+
+  <div class="admin-wrap" v-else>
+    <div class="admin-head">
+      <div class="admin-title">🎫 卡券货源导航 · 后台管理</div>
+      <div>
+        <a class="btn btn-ghost" href="/" target="_blank">查看前台</a>
+        <button class="btn btn-ghost" @click="logout">退出登录</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab" v-for="t in tabs" :key="t.key" :class="{active: tab===t.key}" @click="switchTab(t.key)">{{ t.name }}</div>
+    </div>
+
+    <!-- ===== 站点管理 ===== -->
+    <div class="admin-panel" v-if="tab==='sites'">
+      <div class="inline-form">
+        <div><label>站点名称</label><input v-model.trim="siteForm.name" placeholder="名称"></div>
+        <div><label>域名</label><input v-model.trim="siteForm.domain" placeholder="www.example.com" @blur="detectSystem"><div v-if="detectMsg" style="font-size:11px;color:#2b7fff;margin-top:2px">{{ detectMsg }}</div></div>
+        <div><label>简介</label><input v-model.trim="siteForm.intro"></div>
+        <div><label>发卡系统</label><select v-model="siteForm.system"><option v-for="s in systems">{{s}}</option></select></div>
+        <div style="display:flex;gap:12px;padding-top:20px">
+          <label class="sw"><input type="checkbox" v-model="siteForm.featured"> 置顶</label>
+          <label class="sw"><input type="checkbox" v-model="siteForm.sponsored"> 赞助位</label>
+          <label class="sw"><input type="checkbox" v-model="siteForm.crawl_enabled"> 参与比价</label>
+        </div>
+        <div><label>状态</label><select v-model="siteForm.status"><option value="online">上架</option><option value="offline">下架</option></select></div>
+        <button class="btn btn-primary" @click="saveSite">{{ siteForm.id ? '保存修改' : '新增站点' }}</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>ID</th><th>名称</th><th>域名</th><th>系统</th><th>置顶</th><th>赞助</th><th>比价</th><th>抓取状态</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="s in sites" :key="s.id" :class="{'fail-row': s.status==='black'}">
+              <td>{{ s.id }}</td>
+              <td><b>{{ s.name }}</b></td>
+              <td>{{ s.domain }}</td>
+              <td><span class="site-system">{{ s.system }}</span></td>
+              <td>{{ s.featured ? '✅' : '—' }}</td>
+              <td>{{ s.sponsored ? '✅' : '—' }}</td>
+              <td>{{ s.crawl_enabled ? '✅' : '—' }}</td>
+              <td><span v-if="s.crawl_enabled" :style="{color: s.crawl_status==='fail' ? 'var(--danger)' : 'var(--ok)'}">{{ s.crawl_status || '未抓取' }}</span><span v-else>—</span></td>
+              <td>{{ {online:'上架', offline:'下架', black:'⛔黑名单'}[s.status] }}</td>
+              <td>
+                <span class="op-btn op-edit" @click="editSite(s)">编辑</span>
+                <span class="op-btn op-warn" v-if="s.status!=='black'" @click="blacklist(s.id)">加黑</span>
+                <span class="op-btn op-ok" v-else @click="restore(s.id)">恢复</span>
+                <span class="op-btn op-del" @click="delSite(s.id)">删除</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 提交审核 ===== -->
+    <div class="admin-panel" v-if="tab==='submissions'">
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>ID</th><th>站点</th><th>域名</th><th>系统</th><th>简介</th><th>友链</th><th>联系方式</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="s in submissions" :key="s.id">
+              <td>{{ s.id }}</td>
+              <td><b>{{ s.name }}</b></td>
+              <td>{{ s.domain }}</td>
+              <td>{{ s.system }}</td>
+              <td style="max-width:180px">{{ s.intro }}</td>
+              <td style="max-width:120px;word-break:break-all">{{ s.friend_link }}</td>
+              <td>{{ s.contact }}</td>
+              <td>{{ {pending:'⏳待审', approved:'✅通过', rejected:'❌驳回'}[s.status] }}<div v-if="s.reason" style="font-size:11px;color:var(--danger)">{{ s.reason }}</div></td>
+              <td v-if="s.status==='pending'">
+                <span class="op-btn op-ok" @click="review(s.id,'approve')">通过</span>
+                <span class="op-btn op-del" @click="rejectWithReason(s.id)">驳回</span>
+              </td>
+              <td v-else>—</td>
+            </tr>
+            <tr v-if="!submissions.length"><td colspan="9" style="text-align:center;color:var(--text-2)">暂无提交记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 比价爬虫管理 ===== -->
+    <div class="admin-panel" v-if="tab==='crawler'">
+      <div class="stat-cards">
+        <div class="stat-card"><b>{{ crawler.stat.total }}</b><span>近 24 小时抓取次数</span></div>
+        <div class="stat-card"><b style="color:var(--danger)">{{ crawler.stat.fail }}</b><span>失败次数</span></div>
+        <div class="stat-card"><b>{{ crawler.cacheTtlMinutes }} 分钟</b><span>同关键词缓存时长</span></div>
+        <div class="stat-card"><b>3</b><span>并发上限 · 超时 8 秒</span></div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="sw"><input type="checkbox" v-model="failOnly" @change="loadLogs"> 仅看失败记录</label>
+        <span style="font-size:12px;color:var(--text-2);margin-left:12px">策略：仅抓取第三方前台公开搜索页，不登录、不提交表单；失败不阻塞整体查询，自动标记站点。</span>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>时间</th><th>关键词</th><th>站点</th><th>结果</th><th>商品数</th><th>耗时</th><th>信息</th></tr></thead>
+          <tbody>
+            <tr v-for="l in crawler.logs" :key="l.id" :class="{'fail-row': !l.ok}">
+              <td>{{ l.created_at }}</td>
+              <td><b>{{ l.keyword }}</b></td>
+              <td>{{ l.site_name }}</td>
+              <td>{{ l.ok ? '✅成功' : '❌失败' }}</td>
+              <td>{{ l.item_count }}</td>
+              <td>{{ l.cost_ms }}ms</td>
+              <td style="max-width:260px">{{ l.msg }}</td>
+            </tr>
+            <tr v-if="!crawler.logs.length"><td colspan="7" style="text-align:center;color:var(--text-2)">暂无抓取日志</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 公告管理 ===== -->
+    <div class="admin-panel" v-if="tab==='announcements'">
+      <div class="inline-form">
+        <div><label>标题</label><input v-model.trim="annForm.title"></div>
+        <div style="grid-column:span 2"><label>内容</label><input v-model.trim="annForm.content"></div>
+        <label class="sw" style="padding-top:20px"><input type="checkbox" v-model="annForm.enabled"> 启用</label>
+        <button class="btn btn-primary" @click="saveAnn">{{ annForm.id ? '保存' : '新增公告' }}</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>ID</th><th>标题</th><th>内容</th><th>启用</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="a in announcements" :key="a.id">
+              <td>{{ a.id }}</td><td><b>{{ a.title }}</b></td><td style="max-width:320px">{{ a.content }}</td><td>{{ a.enabled ? '✅' : '—' }}</td>
+              <td><span class="op-btn op-edit" @click="annForm={...a, enabled: !!a.enabled}">编辑</span><span class="op-btn op-del" @click="delItem('announcements', a.id)">删除</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 广告横幅管理 ===== -->
+    <div class="admin-panel" v-if="tab==='banners'">
+      <div class="inline-form">
+        <div><label>标签</label><input v-model.trim="banForm.tag" placeholder="如：优惠券"></div>
+        <div style="grid-column:span 2"><label>广告文字</label><input v-model.trim="banForm.text"></div>
+        <div><label>跳转链接</label><input v-model.trim="banForm.link" placeholder="#/sites 或完整URL"></div>
+        <div><label>排序</label><input type="number" v-model.number="banForm.sort"></div>
+        <label class="sw" style="padding-top:20px"><input type="checkbox" v-model="banForm.enabled"> 启用</label>
+        <button class="btn btn-primary" @click="saveBanner">{{ banForm.id ? '保存' : '新增广告' }}</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>ID</th><th>标签</th><th>文字</th><th>链接</th><th>排序</th><th>启用</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="b in banners" :key="b.id">
+              <td>{{ b.id }}</td><td><span class="banner-tag">{{ b.tag }}</span></td><td><b>{{ b.text }}</b></td><td>{{ b.link }}</td><td>{{ b.sort }}</td><td>{{ b.enabled ? '✅' : '—' }}</td>
+              <td><span class="op-btn op-edit" @click="banForm={...b, enabled: !!b.enabled}">编辑</span><span class="op-btn op-del" @click="delItem('banners', b.id)">删除</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 友链管理 ===== -->
+    <div class="admin-panel" v-if="tab==='links'">
+      <div class="inline-form">
+        <div><label>名称</label><input v-model.trim="linkForm.name"></div>
+        <div style="grid-column:span 2"><label>链接</label><input v-model.trim="linkForm.url"></div>
+        <label class="sw" style="padding-top:20px"><input type="checkbox" v-model="linkForm.enabled"> 启用</label>
+        <button class="btn btn-primary" @click="saveLink">{{ linkForm.id ? '保存' : '新增友链' }}</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>ID</th><th>名称</th><th>链接</th><th>状态</th><th>启用</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="l in links" :key="l.id">
+              <td>{{ l.id }}</td><td><b>{{ l.name }}</b></td><td>{{ l.url }}</td>
+              <td><span :class="l.status==='pending' ? 'tag-warn' : ''">{{ l.status==='pending' ? '⏳ 待审' : '✅ 通过' }}</span></td>
+              <td>{{ l.enabled ? '✅' : '—' }}</td>
+              <td>
+                <span class="op-btn op-edit" @click="linkForm={...l, enabled: !!l.enabled, status: l.status || 'approved'}">编辑</span>
+                <span class="op-btn op-edit" v-if="l.status==='pending'" @click="reviewLink(l.id, 'approved')">通过</span>
+                <span class="op-btn op-del" v-else @click="reviewLink(l.id, 'pending')">驳回</span>
+                <span class="op-btn op-del" @click="delItem('links', l.id)">删除</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 举报/反馈 ===== -->
+    <div class="admin-panel" v-if="tab==='reports'">
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>时间</th><th>站点</th><th>网址</th><th>内容</th><th>联系方式</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="r in reports" :key="r.id" :class="{'fail-row': r.status==='pending'}">
+              <td>{{ r.created_at }}</td><td>{{ r.site_name }}</td><td style="max-width:160px;word-break:break-all">{{ r.url }}</td>
+              <td style="max-width:280px">{{ r.reason }}</td><td>{{ r.contact }}</td>
+              <td>{{ r.status==='pending' ? '⏳待处理' : '✅已处理' }}</td>
+              <td><span class="op-btn op-ok" v-if="r.status==='pending'" @click="resolveReport(r.id)">标记已处理</span></td>
+            </tr>
+            <tr v-if="!reports.length"><td colspan="7" style="text-align:center;color:var(--text-2)">暂无举报/反馈</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://registry.npmmirror.com/vue/3.4.21/files/dist/vue.global.prod.js"></script>
+<script>
+window.Vue || document.write('<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"><\/script>');
+</script>
+<script>
+const { createApp, ref, reactive, onMounted } = Vue;
+createApp({
+  setup() {
+    const systems = ['卡易信', '卡商云', '卡速售', '卡卡云', '优权益'];
+    const tabs = [
+      { key: 'sites', name: '站点管理' },
+      { key: 'submissions', name: '提交审核' },
+      { key: 'crawler', name: '比价爬虫' },
+      { key: 'announcements', name: '公告管理' },
+      { key: 'banners', name: '广告横幅' },
+      { key: 'links', name: '友链管理' },
+      { key: 'reports', name: '举报/反馈' }
+    ];
+    const token = ref(localStorage.getItem('admin_token') || '');
+    const tab = ref('sites');
+    const toast = ref(''), toastType = ref('');
+    let toastTimer;
+    const showToast = (m, err) => {
+      toast.value = m; toastType.value = err ? 'err' : '';
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.value = '', 2600);
+    };
+    const api = async (url, opt = {}) => {
+      const r = await fetch(url, {
+        ...opt,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token.value }
+      });
+      if (r.status === 401) { token.value = ''; localStorage.removeItem('admin_token'); showToast('登录已失效', true); throw new Error('401'); }
+      return r.json();
+    };
+
+    // 登录
+    const loginName = ref(''), loginPass = ref('');
+    async function doLogin() {
+      const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: loginName.value, password: loginPass.value }) }).then(r => r.json());
+      if (r.error) return showToast(r.error, true);
+      token.value = r.token; localStorage.setItem('admin_token', r.token);
+      loadAll();
+    }
+    const logout = () => { token.value = ''; localStorage.removeItem('admin_token'); };
+
+    // 站点
+    const sites = ref([]);
+    const emptySite = () => ({ id: 0, name: '', domain: '', intro: '', system: '卡易信', status: 'online', featured: false, sponsored: false, crawl_enabled: false });
+    const siteForm = reactive(emptySite());
+    async function loadSites() { sites.value = await api('/api/admin/sites'); }
+    // 域名失焦时自动识别发卡系统
+    const detectMsg = ref('');
+    let lastDetected = '';
+    async function detectSystem() {
+      const d = siteForm.domain;
+      if (!d || d === lastDetected) return;
+      lastDetected = d;
+      detectMsg.value = '正在识别…';
+      const r = await fetch('/api/detect-system', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain: d }) }).then(x => x.json()).catch(() => ({}));
+      detectMsg.value = r.message || '';
+      if (r.system) { siteForm.system = r.system; if (r.confident) showToast(r.message); }
+    }
+    function editSite(s) { Object.assign(siteForm, { ...s, featured: !!s.featured, sponsored: !!s.sponsored, crawl_enabled: !!s.crawl_enabled }); lastDetected = s.domain; detectMsg.value = ''; window.scrollTo(0, 0); }
+    async function saveSite() {
+      if (!siteForm.name || !siteForm.domain) return showToast('名称与域名必填', true);
+      const body = { ...siteForm, featured: siteForm.featured ? 1 : 0, sponsored: siteForm.sponsored ? 1 : 0, crawl_enabled: siteForm.crawl_enabled ? 1 : 0 };
+      const r = siteForm.id
+        ? await api('/api/admin/sites/' + siteForm.id, { method: 'PUT', body: JSON.stringify(body) })
+        : await api('/api/admin/sites', { method: 'POST', body: JSON.stringify(body) });
+      if (r.error) return showToast(r.error, true);
+      showToast('已保存'); Object.assign(siteForm, emptySite()); loadSites();
+    }
+    async function delSite(id) { if (!confirm('确定删除该站点？（黑名单建议用"加黑"保留下架记录）')) return; await api('/api/admin/sites/' + id, { method: 'DELETE' }); showToast('已删除'); loadSites(); }
+    async function blacklist(id) { if (!confirm('加入黑名单将自动关闭收录与比价抓取，确认？')) return; const r = await api(`/api/admin/sites/${id}/blacklist`, { method: 'POST' }); showToast(r.message); loadSites(); }
+    async function restore(id) { await api(`/api/admin/sites/${id}/restore`, { method: 'POST' }); showToast('已恢复'); loadSites(); }
+
+    // 提交审核
+    const submissions = ref([]);
+    async function loadSubs() { submissions.value = await api('/api/admin/submissions'); }
+    async function review(id, action, reason) {
+      const r = await api(`/api/admin/submissions/${id}/review`, { method: 'POST', body: JSON.stringify({ action, reason }) });
+      if (r.error) return showToast(r.error, true);
+      showToast(r.message); loadSubs();
+    }
+    async function rejectWithReason(id) {
+      const reason = prompt('请填写驳回理由：');
+      if (!reason || !reason.trim()) return;
+      review(id, 'reject', reason.trim());
+    }
+
+    // 爬虫日志
+    const crawler = reactive({ logs: [], stat: { total: 0, fail: 0 }, cacheTtlMinutes: 4 });
+    const failOnly = ref(false);
+    async function loadLogs() {
+      const r = await api('/api/admin/crawler/logs' + (failOnly.value ? '?fail=1' : ''));
+      Object.assign(crawler, r);
+    }
+
+    // 公告
+    const announcements = ref([]);
+    const annForm = reactive({ id: 0, title: '', content: '', enabled: true });
+    async function loadAnns() { announcements.value = await api('/api/admin/announcements'); }
+    async function saveAnn() {
+      if (!annForm.title) return showToast('标题必填', true);
+      const body = JSON.stringify({ ...annForm, enabled: annForm.enabled ? 1 : 0 });
+      annForm.id ? await api('/api/admin/announcements/' + annForm.id, { method: 'PUT', body }) : await api('/api/admin/announcements', { method: 'POST', body });
+      showToast('已保存'); Object.assign(annForm, { id: 0, title: '', content: '', enabled: true }); loadAnns();
+    }
+
+    // 广告
+    const banners = ref([]);
+    const banForm = reactive({ id: 0, tag: '推荐', text: '', link: '#', sort: 0, enabled: true });
+    async function loadBanners() { banners.value = await api('/api/admin/banners'); }
+    async function saveBanner() {
+      if (!banForm.text) return showToast('广告文字必填', true);
+      const body = JSON.stringify({ ...banForm, enabled: banForm.enabled ? 1 : 0 });
+      banForm.id ? await api('/api/admin/banners/' + banForm.id, { method: 'PUT', body }) : await api('/api/admin/banners', { method: 'POST', body });
+      showToast('已保存'); Object.assign(banForm, { id: 0, tag: '推荐', text: '', link: '#', sort: 0, enabled: true }); loadBanners();
+    }
+
+    // 友链
+    const links = ref([]);
+    const linkForm = reactive({ id: 0, name: '', url: '', enabled: true, status: 'approved' });
+    async function loadLinks() { links.value = await api('/api/admin/links'); }
+    async function saveLink() {
+      if (!linkForm.name || !linkForm.url) return showToast('名称与链接必填', true);
+      const body = JSON.stringify({ ...linkForm, enabled: linkForm.enabled ? 1 : 0 });
+      linkForm.id ? await api('/api/admin/links/' + linkForm.id, { method: 'PUT', body }) : await api('/api/admin/links', { method: 'POST', body });
+      showToast('已保存'); Object.assign(linkForm, { id: 0, name: '', url: '', enabled: true, status: 'approved' }); loadLinks();
+    }
+    async function reviewLink(id, status) { await api(`/api/admin/links/${id}/review`, { method: 'POST', body: JSON.stringify({ status }) }); showToast(status === 'approved' ? '已通过' : '已驳回'); loadLinks(); }
+
+    // 举报
+    const reports = ref([]);
+    async function loadReports() { reports.value = await api('/api/admin/reports'); }
+    async function resolveReport(id) { await api(`/api/admin/reports/${id}/resolve`, { method: 'POST' }); showToast('已标记处理'); loadReports(); }
+
+    // 通用删除
+    const MAP = { announcements: loadAnns, banners: loadBanners, links: loadLinks };
+    async function delItem(kind, id) {
+      if (!confirm('确定删除？')) return;
+      await api(`/api/admin/${kind}/${id}`, { method: 'DELETE' });
+      showToast('已删除'); MAP[kind]();
+    }
+
+    function switchTab(k) { tab.value = k; ({ sites: loadSites, submissions: loadSubs, crawler: loadLogs, announcements: loadAnns, banners: loadBanners, links: loadLinks, reports: loadReports })[k](); }
+    function loadAll() { loadSites(); }
+
+    onMounted(() => { if (token.value) loadAll(); });
+
+    return {
+      tabs, tab, token, toast, toastType, showToast, loginName, loginPass, doLogin, logout, systems,
+      sites, siteForm, editSite, saveSite, delSite, blacklist, restore, detectMsg, detectSystem,
+      submissions, review, rejectWithReason,
+      crawler, failOnly, loadLogs,
+      announcements, annForm, saveAnn, banners, banForm, saveBanner,
+      links, linkForm, saveLink, reviewLink, reports, resolveReport, delItem, switchTab
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

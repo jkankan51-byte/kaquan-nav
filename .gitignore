@@ -1,0 +1,14 @@
+node_modules/
+npm-debug.log*
+
+# 运行时数据（SQLite 与 favicon 缓存）由 Render 持久磁盘托管，不进 git
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/favicons/
+*.log
+server.log
+
+# 本地/工具目录
+.workbuddy/
+.DS_Store
