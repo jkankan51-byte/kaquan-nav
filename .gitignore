@@ -10,3 +10,10 @@ server.log
 # 本地/工具目录
 .workbuddy/
 .DS_Store
+
+# 本地临时/敏感文件
+conninfo.json
+env_payload.json
+set_env.py
+latest.db
+pgtest.log
