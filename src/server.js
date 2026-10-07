@@ -663,18 +663,55 @@ app.delete('/api/admin/banners/:id', adminAuth, (req, res) => {
 app.get('/api/admin/links', adminAuth, (req, res) => {
   res.json(db.prepare("SELECT * FROM links ORDER BY CASE WHEN status='pending' THEN 0 ELSE 1 END, id DESC").all());
 });
-app.post('/api/admin/links', adminAuth, (req, res) => {
+app.post('/api/admin/links', adminAuth, async (req, res) => {
   const { name, url, enabled = 1, status = 'approved' } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: '名称与链接必填' });
+  const fullUrl = normUrl(url);
+  // 自动补全 TDK：没填标题/简介时抓对方首页
+  let title = (req.body.title || '').trim();
+  let keywords = (req.body.keywords || '').trim();
+  let description = (req.body.description || '').trim();
+  if (!title || !description) {
+    const got = await crawlLinkPage(fullUrl, req.headers.host || '');
+    if (got) {
+      if (!title) title = got.title;
+      if (!keywords) keywords = got.keywords;
+      if (!description) description = got.description;
+    }
+  }
   const r = db.prepare("INSERT INTO links (name,url,enabled,status,title,keywords,description) VALUES (?,?,?,?,?,?,?)")
-    .run(name, normUrl(url), +enabled, status === 'pending' ? 'pending' : 'approved', req.body.title || name, req.body.keywords || '', req.body.description || '');
-  res.json({ ok: true, id: r.lastInsertRowid });
+    .run(name, fullUrl, +enabled, status === 'pending' ? 'pending' : 'approved', title || name, keywords, description);
+  favicon.getFavicon(linkDomain(fullUrl)).catch(() => {});
+  res.json({ ok: true, id: r.lastInsertRowid, tdk: { title, keywords, description } });
 });
-app.put('/api/admin/links/:id', adminAuth, (req, res) => {
+app.put('/api/admin/links/:id', adminAuth, async (req, res) => {
   const { name, url, enabled = 1, status = 'approved' } = req.body || {};
-  db.prepare('UPDATE links SET name=?,url=?,enabled=?,status=? WHERE id=?')
-    .run(name, normUrl(url), +enabled, status === 'pending' ? 'pending' : 'approved', req.params.id);
+  const fullUrl = normUrl(url);
+  // 编辑时若清空了标题/简介，也自动补全
+  let title = (req.body.title || '').trim();
+  let keywords = (req.body.keywords || '').trim();
+  let description = (req.body.description || '').trim();
+  if ((!title || !description) && fullUrl) {
+    const got = await crawlLinkPage(fullUrl, req.headers.host || '');
+    if (got) {
+      if (!title) title = got.title;
+      if (!keywords) keywords = got.keywords;
+      if (!description) description = got.description;
+    }
+  }
+  db.prepare('UPDATE links SET name=?,url=?,enabled=?,status=?,title=?,keywords=?,description=? WHERE id=?')
+    .run(name, fullUrl, +enabled, status === 'pending' ? 'pending' : 'approved', title || name, keywords, description, req.params.id);
   res.json({ ok: true });
+});
+// 一键补全 TDK：抓对方首页更新标题/关键词/简介
+app.post('/api/admin/links/:id/fetch-tdk', adminAuth, async (req, res) => {
+  const row = db.prepare('SELECT * FROM links WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: '友链不存在' });
+  const got = await crawlLinkPage(row.url, req.headers.host || '');
+  if (!got || (!got.title && !got.description)) return res.status(502).json({ error: '无法访问该网站，抓取失败' });
+  db.prepare('UPDATE links SET title=?,keywords=?,description=? WHERE id=?')
+    .run(got.title || row.name, got.keywords || row.keywords, got.description || row.description, row.id);
+  res.json({ ok: true, ...got });
 });
 // 一键通过 / 驳回待审友链
 app.post('/api/admin/links/:id/review', adminAuth, (req, res) => {

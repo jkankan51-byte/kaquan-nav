@@ -222,6 +222,7 @@ body { background: #eef4fb; }
               <td>{{ l.enabled ? '✅' : '—' }}</td>
               <td>
                 <span class="op-btn op-edit" @click="linkForm={...l, enabled: !!l.enabled, status: l.status || 'approved'}">编辑</span>
+                <span class="op-btn op-edit" @click="fetchLinkTdk(l.id)">获取TDK</span>
                 <span class="op-btn op-edit" v-if="l.status==='pending'" @click="reviewLink(l.id, 'approved')">通过</span>
                 <span class="op-btn op-del" v-else @click="reviewLink(l.id, 'pending')">驳回</span>
                 <span class="op-btn op-del" @click="delItem('links', l.id)">删除</span>
@@ -380,6 +381,13 @@ createApp({
       showToast('已保存'); Object.assign(linkForm, { id: 0, name: '', url: '', enabled: true, status: 'approved' }); loadLinks();
     }
     async function reviewLink(id, status) { await api(`/api/admin/links/${id}/review`, { method: 'POST', body: JSON.stringify({ status }) }); showToast(status === 'approved' ? '已通过' : '已驳回'); loadLinks(); }
+    async function fetchLinkTdk(id) {
+      showToast('正在抓取对方网站信息…');
+      const r = await api(`/api/admin/links/${id}/fetch-tdk`, { method: 'POST', body: '{}' }).catch(() => null);
+      if (r && r.ok) showToast(r.description ? '已更新标题/关键词/简介' : '已更新（对方站未写简介）');
+      else showToast('抓取失败：网站无法访问', true);
+      loadLinks();
+    }
 
     // 举报
     const reports = ref([]);
@@ -405,7 +413,7 @@ createApp({
       submissions, review, rejectWithReason,
       crawler, failOnly, loadLogs,
       announcements, annForm, saveAnn, banners, banForm, saveBanner,
-      links, linkForm, saveLink, reviewLink, reports, resolveReport, delItem, switchTab
+      links, linkForm, saveLink, reviewLink, fetchLinkTdk, reports, resolveReport, delItem, switchTab
     };
   }
 }).mount('#app');
