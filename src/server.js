@@ -294,8 +294,10 @@ app.post('/api/track', (req, res) => {
   if (/^[a-f0-9-]{8,64}$/i.test(visitor)) {
     const d = today();
     presence.set(visitor, Date.now());
+    // 先查是否存在再插入（兼容 SQLite/PG，避免 SQLite 专用 changes()）
+    const existed = db.prepare('SELECT 1 AS c FROM stats_visitors WHERE day=? AND visitor=?').get(d, visitor);
+    const isNew = !existed;
     db.prepare('INSERT OR IGNORE INTO stats_visitors (day, visitor) VALUES (?,?)').run(d, visitor);
-    const isNew = db.prepare('SELECT changes() AS c').get().c > 0;
     db.prepare(`INSERT INTO stats_daily (day, pv, uv) VALUES (?,1,?)
                 ON CONFLICT(day) DO UPDATE SET pv = pv + 1, uv = uv + ?`)
       .run(d, isNew ? 1 : 0, isNew ? 1 : 0);

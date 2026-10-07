@@ -57,8 +57,12 @@ function convertSql(sql, forRun) {
   q = q.replace(/\?/g, () => `$${++i}`);
 
   // run 模式下 INSERT 附带 RETURNING id 以获得 lastInsertRowid
+  // （stats_daily / stats_visitors 没有 id 列，跳过，否则整条语句报错）
   if (forRun && /^INSERT/i.test(q.trim()) && !/RETURNING/i.test(q)) {
-    q = q.trim().replace(/;?\s*$/, '') + ' RETURNING id';
+    const t = q.match(/INSERT\s+INTO\s+"?(\w+)"?/i);
+    if (!t || !/^(stats_daily|stats_visitors)$/i.test(t[1])) {
+      q = q.trim().replace(/;?\s*$/, '') + ' RETURNING id';
+    }
   }
   return q;
 }
