@@ -27,7 +27,13 @@ let timer = null;
 function git(args) {
   // 绕过 Git for Windows 的凭据选择器（避免 push 卡住）；Linux(Render) 上无此工具，参数无害
   const full = ['-c', 'credential.helper=', '-c', 'credential.helperselector=', ...args];
-  execFileSync('git', full, { cwd: REPO, stdio: 'ignore', timeout: 30000 });
+  try {
+    execFileSync('git', full, { cwd: REPO, stdio: 'ignore', timeout: 30000 });
+  } catch (e) {
+    // 带上 stderr 方便在 Render Logs 里定位（如 token 无效/无权限）
+    const stderr = (e.stderr && e.stderr.toString()) || e.message;
+    throw new Error(`git ${args[0]} 失败: ${stderr.slice(0, 300)}`);
+  }
 }
 
 function configure() {
@@ -41,7 +47,11 @@ function configure() {
 
 function pull() {
   if (!TOKEN) return;
-  try { git(['pull', '--rebase', '--autostash', 'origin', BRANCH]); } catch (_) {}
+  try {
+    git(['pull', '--rebase', '--autostash', 'origin', BRANCH]);
+  } catch (e) {
+    console.error('⚠️ 启动拉取 db 失败:', (e && e.message) || e);
+  }
 }
 
 // 进程启动最早期调用：先把 GitHub 上最新的 db 拉回本地磁盘，再让 db.js 打开它
@@ -68,8 +78,9 @@ function push() {
     lastMtime = m;
     console.log('✅ 数据库已同步回 GitHub');
     return true;
-  } catch (_) {
-    return false; // 忽略：可能无变化或网络抖动
+  } catch (e) {
+    console.error('❌ 数据库同步失败:', (e && e.message) || e); // 在 Render Logs 可见
+    return false;
   }
 }
 
