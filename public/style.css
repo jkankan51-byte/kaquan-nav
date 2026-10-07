@@ -33,7 +33,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; outline: none; 
 }
 .nav-inner { display: flex; align-items: center; gap: 14px; height: 56px; }
 .logo { font-size: 20px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.logo .logo-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg,#2b7fff,#6ab7ff); color:#fff; font-size:14px; display:flex; align-items:center; justify-content:center; }
+.logo .logo-mark { width: 28px; height: 28px; border-radius: 8px; display: block; box-shadow: 0 2px 6px rgba(43,127,255,.28); }
 .nav-links { display: flex; gap: 4px; }
 .nav-links a { padding: 6px 12px; border-radius: 8px; color: var(--text-2); font-weight: 500; }
 .nav-links a.active, .nav-links a:hover { color: var(--primary); background: var(--primary-light); }
