@@ -299,7 +299,7 @@ app.post('/api/track', (req, res) => {
     const isNew = !existed;
     db.prepare('INSERT OR IGNORE INTO stats_visitors (day, visitor) VALUES (?,?)').run(d, visitor);
     db.prepare(`INSERT INTO stats_daily (day, pv, uv) VALUES (?,1,?)
-                ON CONFLICT(day) DO UPDATE SET pv = pv + 1, uv = uv + ?`)
+                ON CONFLICT(day) DO UPDATE SET pv = stats_daily.pv + 1, uv = stats_daily.uv + ?`)
       .run(d, isNew ? 1 : 0, isNew ? 1 : 0);
     db.prepare('UPDATE stats_total SET pv = pv + 1, uv = uv + ? WHERE id = 1').run(isNew ? 1 : 0);
   }
