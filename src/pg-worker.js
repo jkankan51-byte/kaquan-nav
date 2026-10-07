@@ -40,8 +40,11 @@ function convertSql(sql, forRun) {
     while ((mm = re.exec(mods))) {
       const mod = mm[1];
       if (/^(localtime|utc)$/i.test(mod)) continue;
-      const iv = mod.match(/^([+-]?\d+)\s+(day|month|year|hour|minute|second)s?$/i);
-      if (iv) interval += ` interval '${iv[1]} ${iv[2].toLowerCase()}s'`;
+      const iv = mod.match(/^([+-]?)\s*(\d+)\s+(day|month|year|hour|minute|second)s?$/i);
+      if (iv) {
+        const op = iv[1] === '-' ? '-' : '+';
+        interval += ` ${op} interval '${iv[2]} ${iv[3].toLowerCase()}s'`;
+      }
     }
     return `(to_char(now() AT TIME ZONE 'UTC'${interval}, 'YYYY-MM-DD HH24:MI:SS'))`;
   });

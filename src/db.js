@@ -181,8 +181,12 @@ try {
 // 历史站点点击量基数（仅对 0 点击站点生效）
 db.prepare('UPDATE sites SET clicks = (id * 977 + 5861) % 9000 + 1200 WHERE clicks = 0').run();
 
-// 清理 7 天前的访客去重记录
-db.prepare("DELETE FROM stats_visitors WHERE day < datetime('now','-7 days','localtime')").run();
+// 清理 7 天前的访客去重记录（用 JS 算日期，兼容 SQLite/PG 两种方言）
+{
+  const cut = new Date(Date.now() - 7 * 86400000);
+  const cutoff = `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-${String(cut.getDate()).padStart(2, '0')}`;
+  db.prepare('DELETE FROM stats_visitors WHERE day < ?').run(cutoff);
+}
 
 // ---------- 种子数据（仅当 sites 为空时） ----------
 try {
