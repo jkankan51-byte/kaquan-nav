@@ -64,6 +64,8 @@ function configure() {
       // Render 容器里可能没有 origin 远程，set-url 会失败；先删再加保证一定存在
       try { git(['remote', 'remove', 'origin']); } catch (_) {}
       git(['remote', 'add', 'origin', REMOTE]);
+      // Render 检出的是 detached HEAD，直接 commit 会丢；强制建立并切到 main 分支
+      try { git(['checkout', '-B', BRANCH]); } catch (e) { console.error('⚠️ checkout main 失败:', (e && e.message) || e); }
     }
   } catch (e) {
     console.error('⚠️ git 配置失败:', (e && e.message) || e);
