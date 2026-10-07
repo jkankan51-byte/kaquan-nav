@@ -10,7 +10,7 @@ const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new DatabaseSync(path.join(dataDir, 'kaquan.db'));
-db.exec('PRAGMA journal_mode = WAL;');
+// 默认单文件模式（DELETE journal），便于把 db 同步进 git 做跨部署持久化
 
 // ---------- 建表 ----------
 db.exec(`
@@ -106,13 +106,22 @@ try {
   db.exec("DELETE FROM links WHERE name IN ('示例博客','示例论坛','示例站点');");
 } catch (_) {}
 
-// 92K导航自动收录回链（仅首次；后台友链管理里可编辑/删除，删掉会影响对方收录检测）
+// 锚点友链（固化进种子，每次部署自动恢复；后台可编辑/删除，新增的友链不会自动进种子）
+// 说明：免费档容器重启会清空数据库，只有写进此处的数据能保证每次部署后自动存在。
+const ANCHOR_LINKS = [
+  ['自动秒收录', 'http://www.92kdh.com/', '92K导航', '网址导航,自动收录,秒收录', '92K导航 - 免费自动秒收录网址导航，做上本站链接来访一次自动首位展示'],
+  ['AT导航', 'https://www.atdh.cn/',
+    'AT导航_收录网_免费收录网站_自动收录网_秒收录',
+    'AT导航,收录网,站长导航网,网址导航系统,自动秒收录,自助收录网',
+    'AT导航(www.atdh.cn)为您提供免费网站收录,以及网址大全库的建立，旨在为用户提供高效便捷的网址收录和查询服务，同时提供最全的优秀名站导航。'],
+];
 try {
-  const has92 = db.prepare("SELECT id FROM links WHERE url LIKE '%92kdh.com%'").get();
-  if (!has92) {
-    db.prepare("INSERT INTO links (name,url,enabled,status,title,keywords,description) VALUES (?,?,?,?,?,?,?)")
-      .run('自动秒收录', 'http://www.92kdh.com/', 1, 'approved',
-        '92K导航', '网址导航,自动收录,秒收录', '92K导航 - 免费自动秒收录网址导航，做上本站链接来访一次自动首位展示');
+  for (const [name, url, title, keywords, description] of ANCHOR_LINKS) {
+    const exist = db.prepare('SELECT id FROM links WHERE url LIKE ?').get(`%${new URL(url).hostname.replace(/^www\./, '')}%`);
+    if (!exist) {
+      db.prepare("INSERT INTO links (name,url,enabled,status,title,keywords,description) VALUES (?,?,?,?,?,?,?)")
+        .run(name, url, 1, 'approved', title, keywords, description);
+    }
   }
 } catch (_) {}
 

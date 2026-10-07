@@ -21,7 +21,8 @@ services:
         sync: false          # 部署后在 Render 后台设置（务必改成强密码）
       - key: BAIDU_PUSH_TOKEN
         value: "UqghpI0bMfAWnAW2"   # 百度站长平台「普通收录-API提交」接口 token（仅用于主动推送网址）
-    # 免费档不支持持久磁盘（disks are not supported for free tier services）
-    # 数据库/图标缓存在 /opt/render/project/src/data（随实例临时存在）
-    # 注意：重新部署或休眠重启后数据会重置为种子数据（db.js 自动重建），站点/友链需重新录入
-    # 如需数据持久化，升级 paid 档后再补回 disk 配置
+      - key: GITHUB_PUSH_TOKEN
+        sync: false          # 部署后在 Render 后台手动填写：具有 repo 权限的 GitHub PAT（用于把数据库同步回仓库实现跨部署持久化）
+    # 免费档不支持持久磁盘；改用「数据库文件同步回 GitHub 仓库」实现跨部署持久化（src/persist.js）
+    # 每次部署自动从仓库拉回最新数据，运行中每 60 秒及关停前自动 push 一次
+    # 注意：GITHUB_PUSH_TOKEN 不要写死在本文件（会被 GitHub 密钥扫描拦截），请在 Render 后台环境变量里填

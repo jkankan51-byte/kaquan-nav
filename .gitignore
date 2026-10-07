@@ -1,10 +1,8 @@
 node_modules/
 npm-debug.log*
 
-# 运行时数据（SQLite 与 favicon 缓存）由 Render 持久磁盘托管，不进 git
-data/*.db
-data/*.db-wal
-data/*.db-shm
+# 运行时数据：数据库文件纳入 git 跟踪（实现跨部署持久化，src/persist.js 自动同步）
+# 注意：仅跟踪 data/kaquan.db 这一个文件；favicon 缓存不进 git
 data/favicons/
 *.log
 server.log

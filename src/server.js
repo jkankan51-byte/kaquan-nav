@@ -9,6 +9,8 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+// 先确保本地数据库是最新版本（从 GitHub 拉回），再让 db.js 打开它
+require('./persist').bootstrap();
 const db = require('./db');
 const crawler = require('./crawler');
 const favicon = require('./favicon');
@@ -29,6 +31,19 @@ function normUrl(u) {
   const s = String(u || '').trim();
   if (!s) return s;
   return /^https?:\/\//i.test(s) ? s : 'https://' + s.replace(/^\/+/, '');
+}
+// 启动后自动补全：仅填了名称/网址、缺标题或简介的友链，去对方首页抓取 TDK（best-effort，不阻塞启动）
+async function enrichLinks() {
+  try {
+    const rows = db.prepare("SELECT id,url FROM links WHERE (title IS NULL OR title='' OR description IS NULL OR description='')").all();
+    for (const r of rows) {
+      const got = await crawlLinkPage(normUrl(r.url), '');
+      if (got && (got.title || got.description)) {
+        db.prepare('UPDATE links SET title=?,keywords=?,description=? WHERE id=?')
+          .run(got.title || r.url, got.keywords || '', got.description || '', r.id);
+      }
+    }
+  } catch (_) {}
 }
 function approvedLinks() {
   return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC")
@@ -774,7 +789,14 @@ app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+// 数据库自动同步回 GitHub（跨部署持久化；需 GITHUB_PUSH_TOKEN 环境变量）
+const persist = require('./persist');
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ 卡券货源导航站已启动: http://localhost:${PORT}`);
   console.log(`   后台管理: http://localhost:${PORT}/admin.html  (账号 ${ADMIN_USER})`);
+  // 启动后自动补全友链 TDK（不阻塞）
+  setTimeout(() => enrichLinks().then(() => console.log('✅ 友链 TDK 自动补全完成')).catch(() => {}), 1500);
+  // 启用数据库持久化同步
+  persist.start();
 });
