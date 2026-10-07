@@ -214,18 +214,23 @@ app.get('/sitemap.xml', (req, res) => {
   res.type('application/xml').send(xml);
 });
 
-// 百度主动推送（需在环境变量 BAIDU_PUSH_TOKEN 配置接口 token；在站长平台「普通收录-API提交」获取）
-app.post('/api/seo/baidu-push', express.json(), (req, res) => {
+// 百度主动推送工具函数（在环境变量 BAIDU_PUSH_TOKEN 配置接口 token）
+function baiduPush(urls) {
   const token = process.env.BAIDU_PUSH_TOKEN;
-  if (!token) return res.status(400).json({ ok: false, msg: '未配置 BAIDU_PUSH_TOKEN' });
+  if (!token || !Array.isArray(urls) || !urls.length) return Promise.resolve(null);
+  const body = urls.join('\n');
+  return fetch(`http://data.zz.baidu.com/urls?site=offclock.top&token=${token}`, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' }, body
+  }).then(r => r.text()).catch(() => null);
+}
+// 百度主动推送（手动触发）
+app.post('/api/seo/baidu-push', express.json(), (req, res) => {
   const urls = Array.isArray(req.body.urls) ? req.body.urls : [];
   if (!urls.length) return res.status(400).json({ ok: false, msg: 'urls 为空' });
-  const body = urls.join('\n');
-  const post = `http://data.zz.baidu.com/urls?site=offclock.top&token=${token}`;
-  fetch(post, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body })
-    .then(r => r.text())
-    .then(t => res.json({ ok: true, baidu: t }))
-    .catch(e => res.status(502).json({ ok: false, msg: String(e) }));
+  baiduPush(urls).then(t => {
+    if (t === null) return res.status(400).json({ ok: false, msg: '未配置 BAIDU_PUSH_TOKEN 或推送失败' });
+    res.json({ ok: true, baidu: t });
+  }).catch(e => res.status(502).json({ ok: false, msg: String(e) }));
 });
 
 // ---------------- 简易后台登录鉴权（内存 token，重启失效，重新登录即可） ----------------
@@ -588,6 +593,7 @@ app.post('/api/admin/submissions/:id/review', adminAuth, (req, res) => {
     db.prepare('INSERT INTO sites (name,domain,intro,description,system,friend_link,logo_color,clicks) VALUES (?,?,?,?,?,?,?,?)')
       .run(sub.name, sub.domain, sub.intro, sub.intro, sub.system, sub.friend_link, '#2b7fff', 800 + Math.floor(Math.random() * 3200));
     favicon.getFavicon(String(sub.domain)).catch(() => {}); // 预热图标缓存
+    baiduPush(['https://offclock.top/']); // 新站点入首页，触发百度重新抓取
     return res.json({ ok: true, message: '已通过并加入站点库' });
   }
   if (action === 'reject') {
@@ -667,6 +673,10 @@ app.put('/api/admin/links/:id', adminAuth, (req, res) => {
 app.post('/api/admin/links/:id/review', adminAuth, (req, res) => {
   const status = req.body && req.body.status === 'pending' ? 'pending' : 'approved';
   db.prepare('UPDATE links SET status=? WHERE id=?').run(status, req.params.id);
+  if (status === 'approved') {
+    const row = db.prepare('SELECT url FROM links WHERE id=?').get(req.params.id);
+    if (row && row.url) baiduPush([row.url]);
+  }
   res.json({ ok: true });
 });
 app.delete('/api/admin/links/:id', adminAuth, (req, res) => {
