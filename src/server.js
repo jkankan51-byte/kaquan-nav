@@ -195,6 +195,11 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // 浏览器默认请求 /favicon.ico：页面已用 data-URI 图标，这里直接 204 避免 404 报错
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
+// 百度站长平台文件验证：验证文件内容即验证码本身
+app.get('/baidu_verify_codeva-xEG7wwYZzc.html', (req, res) => {
+  res.type('html').send('codeva-xEG7wwYZzc');
+});
+
 // ---------------- 简易后台登录鉴权（内存 token，重启失效，重新登录即可） ----------------
 const tokens = new Map(); // token -> expireAt
 const TOKEN_TTL = 12 * 60 * 60 * 1000;
