@@ -69,6 +69,7 @@ body { background: #eef4fb; }
         <div><label>简介</label><input v-model.trim="siteForm.intro"></div>
         <div><label>发卡系统</label><select v-model="siteForm.system"><option v-for="s in systems">{{s}}</option></select></div>
         <div style="display:flex;gap:12px;padding-top:20px">
+          <label class="sw"><input type="checkbox" v-model="siteForm.recommended"> 推荐位</label>
           <label class="sw"><input type="checkbox" v-model="siteForm.featured"> 置顶</label>
           <label class="sw"><input type="checkbox" v-model="siteForm.sponsored"> 赞助位</label>
           <label class="sw"><input type="checkbox" v-model="siteForm.crawl_enabled"> 参与比价</label>
@@ -78,13 +79,14 @@ body { background: #eef4fb; }
       </div>
       <div class="table-wrap" style="box-shadow:none">
         <table>
-          <thead><tr><th>ID</th><th>名称</th><th>域名</th><th>系统</th><th>置顶</th><th>赞助</th><th>比价</th><th>抓取状态</th><th>状态</th><th>操作</th></tr></thead>
+          <thead><tr><th>ID</th><th>名称</th><th>域名</th><th>系统</th><th>推荐</th><th>置顶</th><th>赞助</th><th>比价</th><th>抓取状态</th><th>状态</th><th>操作</th></tr></thead>
           <tbody>
             <tr v-for="s in sites" :key="s.id" :class="{'fail-row': s.status==='black'}">
               <td>{{ s.id }}</td>
               <td><b>{{ s.name }}</b></td>
               <td>{{ s.domain }}</td>
               <td><span class="site-system">{{ s.system }}</span></td>
+              <td>{{ s.recommended === undefined ? '—' : (s.recommended ? '✅' : '—') }}</td>
               <td>{{ s.featured ? '✅' : '—' }}</td>
               <td>{{ s.sponsored ? '✅' : '—' }}</td>
               <td>{{ s.crawl_enabled ? '✅' : '—' }}</td>
@@ -297,7 +299,7 @@ createApp({
 
     // 站点
     const sites = ref([]);
-    const emptySite = () => ({ id: 0, name: '', domain: '', intro: '', system: '卡易信', status: 'online', featured: false, sponsored: false, crawl_enabled: false });
+    const emptySite = () => ({ id: 0, name: '', domain: '', intro: '', system: '卡易信', status: 'online', recommended: true, featured: false, sponsored: false, crawl_enabled: false });
     const siteForm = reactive(emptySite());
     async function loadSites() { sites.value = await api('/api/admin/sites'); }
     // 域名失焦时自动识别发卡系统
@@ -312,10 +314,10 @@ createApp({
       detectMsg.value = r.message || '';
       if (r.system) { siteForm.system = r.system; if (r.confident) showToast(r.message); }
     }
-    function editSite(s) { Object.assign(siteForm, { ...s, featured: !!s.featured, sponsored: !!s.sponsored, crawl_enabled: !!s.crawl_enabled }); lastDetected = s.domain; detectMsg.value = ''; window.scrollTo(0, 0); }
+    function editSite(s) { Object.assign(siteForm, { ...s, recommended: s.recommended === undefined ? true : !!s.recommended, featured: !!s.featured, sponsored: !!s.sponsored, crawl_enabled: !!s.crawl_enabled }); lastDetected = s.domain; detectMsg.value = ''; window.scrollTo(0, 0); }
     async function saveSite() {
       if (!siteForm.name || !siteForm.domain) return showToast('名称与域名必填', true);
-      const body = { ...siteForm, featured: siteForm.featured ? 1 : 0, sponsored: siteForm.sponsored ? 1 : 0, crawl_enabled: siteForm.crawl_enabled ? 1 : 0 };
+      const body = { ...siteForm, recommended: siteForm.recommended ? 1 : 0, featured: siteForm.featured ? 1 : 0, sponsored: siteForm.sponsored ? 1 : 0, crawl_enabled: siteForm.crawl_enabled ? 1 : 0 };
       const r = siteForm.id
         ? await api('/api/admin/sites/' + siteForm.id, { method: 'PUT', body: JSON.stringify(body) })
         : await api('/api/admin/sites', { method: 'POST', body: JSON.stringify(body) });

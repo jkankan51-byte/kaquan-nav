@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS sites (
   status TEXT DEFAULT 'online',            -- online 上架 / offline 下架 / black 黑名单
   featured INTEGER DEFAULT 0,              -- 首页置顶
   sponsored INTEGER DEFAULT 0,             -- 赞助广告位
+  recommended INTEGER DEFAULT 1,           -- 首页推荐位（不勾选则不上"推荐站点"）
   crawl_enabled INTEGER DEFAULT 0,         -- 是否参与比价抓取
   crawl_status TEXT DEFAULT '',            -- 最近抓取状态：ok / fail / ''
   logo_color TEXT DEFAULT '#2b7fff',
@@ -107,7 +108,7 @@ CREATE TABLE IF NOT EXISTS stats_total (     -- 累计总量（单行）
 );
 `;
 
-const ALTER_COLS_SITES = ['clicks INTEGER DEFAULT 0'];
+const ALTER_COLS_SITES = ['clicks INTEGER DEFAULT 0', 'recommended INTEGER DEFAULT 1'];
 const ALTER_COLS_LINKS = ['title TEXT DEFAULT \'\'', 'keywords TEXT DEFAULT \'\'', 'description TEXT DEFAULT \'\'', "status TEXT DEFAULT 'approved'"];
 
 let db;
@@ -123,6 +124,9 @@ if (PG_MODE) {
     ].join('\n');
     const mig = pgstore.migrateSync(DDL_MAIN + '\n' + alters + '\n' + DDL_STATS);
     console.log('✅ Postgres 已连接', mig && mig.skipped ? `(${JSON.stringify(mig.skipped)})` : '(数据迁移完成)');
+    // PG 已有数据时 doMigrate 会跳过 DDL，这里幂等补列（PG 支持 IF NOT EXISTS）
+    for (const col of ALTER_COLS_SITES) { try { pgstore.exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
+    for (const col of ALTER_COLS_LINKS) { try { pgstore.exec(`ALTER TABLE links ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
     pgstore.__pgMode = true;
     db = pgstore;
   } catch (e) {

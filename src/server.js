@@ -329,7 +329,7 @@ app.get('/api/home', (req, res) => {
   const announcements = db.prepare('SELECT * FROM announcements WHERE enabled=1 ORDER BY id DESC LIMIT 5').all();
   const banners = db.prepare('SELECT * FROM banners WHERE enabled=1 ORDER BY sort ASC, id ASC').all();
   const recommended = db.prepare(
-    "SELECT id,name,domain,intro,system,logo_color,featured,sponsored,clicks FROM sites WHERE status='online' ORDER BY featured DESC, sponsored DESC, sort ASC, id ASC LIMIT 10"
+    "SELECT id,name,domain,intro,system,logo_color,featured,sponsored,clicks FROM sites WHERE status='online' AND recommended=1 ORDER BY featured DESC, sponsored DESC, sort ASC, id ASC LIMIT 10"
   ).all();
   const sponsored = db.prepare(
     "SELECT id,name,domain,intro,system,logo_color,clicks FROM sites WHERE status='online' AND sponsored=1 ORDER BY sort ASC, id ASC LIMIT 6"
@@ -562,10 +562,10 @@ app.get('/api/admin/sites', adminAuth, (req, res) => {
 app.post('/api/admin/sites', adminAuth, (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.domain) return res.status(400).json({ error: '名称与域名必填' });
-  const r = db.prepare(`INSERT INTO sites (name,domain,intro,description,system,friend_link,status,featured,sponsored,crawl_enabled,logo_color,sort,clicks)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const r = db.prepare(`INSERT INTO sites (name,domain,intro,description,system,friend_link,status,featured,sponsored,recommended,crawl_enabled,logo_color,sort,clicks)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     b.name, b.domain, b.intro || '', b.description || '', b.system || '卡易信', b.friend_link || '',
-    b.status || 'online', +b.featured || 0, +b.sponsored || 0, +b.crawl_enabled || 0,
+    b.status || 'online', +b.featured || 0, +b.sponsored || 0, b.recommended === undefined ? 1 : (+b.recommended || 0), +b.crawl_enabled || 0,
     b.logo_color || '#2b7fff', +b.sort || 0, 800 + Math.floor(Math.random() * 3200));
   favicon.getFavicon(String(b.domain)).catch(() => {}); // 预热图标缓存
   res.json({ ok: true, id: r.lastInsertRowid });
@@ -573,14 +573,14 @@ app.post('/api/admin/sites', adminAuth, (req, res) => {
 
 app.put('/api/admin/sites/:id', adminAuth, (req, res) => {
   const b = req.body || {};
-  const fields = ['name','domain','intro','description','system','friend_link','status','featured','sponsored','crawl_enabled','logo_color','sort'];
+  const fields = ['name','domain','intro','description','system','friend_link','status','featured','sponsored','recommended','crawl_enabled','logo_color','sort'];
   const site = db.prepare('SELECT * FROM sites WHERE id=?').get(req.params.id);
   if (!site) return res.status(404).json({ error: '站点不存在' });
   const merged = { ...site, ...b };
   db.prepare(`UPDATE sites SET name=?,domain=?,intro=?,description=?,system=?,friend_link=?,status=?,
-    featured=?,sponsored=?,crawl_enabled=?,logo_color=?,sort=? WHERE id=?`).run(
+    featured=?,sponsored=?,recommended=?,crawl_enabled=?,logo_color=?,sort=? WHERE id=?`).run(
     merged.name, merged.domain, merged.intro, merged.description, merged.system, merged.friend_link,
-    merged.status, +merged.featured || 0, +merged.sponsored || 0, +merged.crawl_enabled || 0,
+    merged.status, +merged.featured || 0, +merged.sponsored || 0, merged.recommended == null ? 1 : (+merged.recommended || 0), +merged.crawl_enabled || 0,
     merged.logo_color, +merged.sort || 0, req.params.id);
   res.json({ ok: true });
 });
@@ -592,7 +592,7 @@ app.delete('/api/admin/sites/:id', adminAuth, (req, res) => {
 
 // 黑名单：一键下架 + 关闭比价
 app.post('/api/admin/sites/:id/blacklist', adminAuth, (req, res) => {
-  db.prepare("UPDATE sites SET status='black', crawl_enabled=0, sponsored=0, featured=0 WHERE id=?").run(req.params.id);
+  db.prepare("UPDATE sites SET status='black', crawl_enabled=0, sponsored=0, featured=0, recommended=0 WHERE id=?").run(req.params.id);
   res.json({ ok: true, message: '已加入黑名单：自动关闭收录与比价抓取' });
 });
 
