@@ -20,6 +20,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// 浏览器默认请求 /favicon.ico：页面已用 data-URI 图标，这里直接 204 避免 404 报错
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // ---------------- 简易后台登录鉴权（内存 token，重启失效，重新登录即可） ----------------
 const tokens = new Map(); // token -> expireAt

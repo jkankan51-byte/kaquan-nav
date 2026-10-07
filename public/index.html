@@ -426,10 +426,7 @@
   <div class="toast" :class="{err: toastType==='err'}" v-if="toast">{{ toast }}</div>
 </div>
 
-<script src="https://registry.npmmirror.com/vue/3.4.21/files/dist/vue.global.prod.js"></script>
-<script>
-window.Vue || document.write('<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"><\/script>');
-</script>
+<script src="/vendor/vue.global.prod.js"></script>
 <script>
 const { createApp, ref, reactive, onMounted } = Vue;
 
