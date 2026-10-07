@@ -103,7 +103,17 @@ for (const col of ['title TEXT DEFAULT \'\'', 'keywords TEXT DEFAULT \'\'', 'des
 // 历史数据兼容：存量友链视为已通过；清理示例假数据
 try {
   db.exec("UPDATE links SET status='approved' WHERE status IS NULL OR status='';");
-  db.exec("DELETE FROM links WHERE name IN ('示例博客','示例论坛');");
+  db.exec("DELETE FROM links WHERE name IN ('示例博客','示例论坛','示例站点');");
+} catch (_) {}
+
+// 92K导航自动收录回链（仅首次；后台友链管理里可编辑/删除，删掉会影响对方收录检测）
+try {
+  const has92 = db.prepare("SELECT id FROM links WHERE url LIKE '%92kdh.com%'").get();
+  if (!has92) {
+    db.prepare("INSERT INTO links (name,url,enabled,status,title,keywords,description) VALUES (?,?,?,?,?,?,?)")
+      .run('自动秒收录', 'http://www.92kdh.com/', 1, 'approved',
+        '92K导航', '网址导航,自动收录,秒收录', '92K导航 - 免费自动秒收录网址导航，做上本站链接来访一次自动首位展示');
+  }
 } catch (_) {}
 
 // ---------- 访问统计表 ----------
@@ -159,9 +169,6 @@ if (count === 0) {
     .run('ChatGPT Plus 会员限时特惠 ¥111，充值秒到账', '优惠券', '#/sites', 1);
   db.prepare('INSERT INTO banners (text, tag, link, sort) VALUES (?,?,?,?)')
     .run('视频会员直充 5 折起，支持批量采购', '推广', '#/sites', 2);
-
-  db.prepare('INSERT INTO links (name, url) VALUES (?,?)').run('示例博客', 'https://blog.example.com');
-  db.prepare('INSERT INTO links (name, url) VALUES (?,?)').run('示例论坛', 'https://bbs.example.com');
 }
 
 module.exports = db;

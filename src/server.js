@@ -19,6 +19,157 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 app.use(express.json({ limit: '256kb' }));
+
+// ==================== 友链目录（服务端渲染：收录机器人/搜索引擎可直接看到回链） ====================
+function escHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function approvedLinks() {
+  return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC").all();
+}
+// 友链胶囊 HTML（favicon + 名称）
+function linkPills(links) {
+  return links.map(l => {
+    const d = linkDomain(l.url) || '';
+    return `<a class="dir-pill" href="${escHtml(l.url)}" target="_blank" title="${escHtml(l.name)}">` +
+      `<img src="/api/favicon?domain=${encodeURIComponent(d)}" alt="" loading="lazy" onerror="this.style.display='none'">` +
+      `<span>${escHtml(l.name)}</span></a>`;
+  }).join('\n');
+}
+
+// 首页：把审核通过的友链以服务端形式注入页脚（后台可管理；对收录机器人可见）
+app.get('/', (req, res) => {
+  try {
+    let html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    const links = approvedLinks();
+    const pills = links.length
+      ? linkPills(links)
+      : `<a class="dir-pill" href="/directory"><span>+ 申请收录</span></a>`;
+    html = html.replace('<!--FRIEND_LINKS-->', pills);
+    res.type('html').send(html);
+  } catch (e) {
+    res.status(500).send('server error');
+  }
+});
+
+// 独立友链目录页：全部友链 + 自助申请（服务端渲染）
+app.get('/directory', (req, res) => {
+  const links = approvedLinks();
+  const pills = linkPills(links);
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>友链目录 - 卡券导航 | 自动秒收录友情链接大全</title>
+<meta name="description" content="卡券导航友情链接目录：收录优质站点，做上本站链接来访一次自动首位展示，支持自助申请友链。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232b7fff'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white'>卡</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f4f7fb;color:#1f2d3d;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:linear-gradient(90deg,#2b7fff,#1e6ae1);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.topbar b{font-size:17px}
+.topbar a{color:#fff;text-decoration:none;font-size:14px;opacity:.9}
+.topbar a:hover{opacity:1;text-decoration:underline}
+.notice{background:#fff;border:1px solid #e5ecf5;border-radius:10px;margin:16px auto 0;max-width:1100px;width:calc(100% - 32px);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.notice .n-tip{font-size:14px;color:#e6772e;font-weight:600}
+.notice .n-btn{background:#2b7fff;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;cursor:pointer;text-decoration:none}
+.wrap{max-width:1100px;margin:16px auto;width:calc(100% - 32px);flex:1}
+.sec-title{font-size:15px;font-weight:700;margin:14px 0 10px;color:#33445c}
+.dir-grid{display:flex;flex-wrap:wrap;gap:10px}
+.dir-pill{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e0e8f2;border-radius:999px;padding:8px 16px 8px 10px;text-decoration:none;color:#2b3c55;font-size:14px;transition:.15s;box-shadow:0 1px 2px rgba(30,60,120,.05)}
+.dir-pill:hover{border-color:#2b7fff;color:#2b7fff;transform:translateY(-1px)}
+.dir-pill img{width:20px;height:20px;border-radius:4px;object-fit:contain;background:#fff}
+.apply{background:#fff;border:1px solid #e5ecf5;border-radius:12px;padding:18px;margin-top:26px}
+.apply h3{font-size:16px;margin-bottom:12px;color:#223}
+.apply .row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.apply label{font-size:13px;color:#5b6b82;width:64px;flex-shrink:0}
+.apply input,.apply textarea{flex:1;min-width:200px;border:1px solid #dce4ee;border-radius:8px;padding:9px 12px;font-size:14px;outline:none}
+.apply input:focus,.apply textarea:focus{border-color:#2b7fff}
+.apply textarea{height:64px;resize:vertical}
+.apply button{background:#2b7fff;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer}
+.apply button:disabled{opacity:.6}
+.apply .btn2{background:#f0f4fa;color:#2b7fff}
+.tip{font-size:13px;margin:6px 0 10px;padding:8px 12px;border-radius:8px;display:none}
+.tip.ok{display:block;background:#eefaf1;color:#1d9e55;border:1px solid #bfe8cf}
+.tip.warn{display:block;background:#fff8ec;color:#c07a1d;border:1px solid #f0dcb4}
+.footer{text-align:center;font-size:12px;color:#8a99ad;padding:18px 0 26px;line-height:1.8}
+.footer a{color:#5b6b82;text-decoration:none}
+@media(max-width:600px){.dir-pill{padding:6px 12px 6px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <b>🔗 卡券导航 · 友链目录</b>
+  <a href="/">← 返回首页</a>
+</div>
+<div class="notice">
+  <span class="n-tip">任何收录网站，做上本站链接来访一次自动首位展示（有望第一，永不沉底）</span>
+  <a class="n-btn" href="#apply">申请收录</a>
+</div>
+<div class="wrap">
+  <div class="sec-title">🕘 最新加入（${links.length} 个站点）</div>
+  <div class="dir-grid">${pills || '<span style="color:#8a99ad;font-size:14px">暂无友链，快来抢占第一位</span>'}</div>
+
+  <div class="apply" id="apply">
+    <h3>✏️ 自助申请友链</h3>
+    <div class="row">
+      <label>网址</label><input id="f-url" placeholder="https://你的网站网址">
+      <button id="btn-tdk" class="btn2" onclick="fetchTdk()">获取TDK</button>
+    </div>
+    <div id="tdk-tip" class="tip"></div>
+    <div class="row"><label>网站名称</label><input id="f-name" maxlength="50" placeholder="网站名称"></div>
+    <div class="row"><label>关键词</label><input id="f-kw" maxlength="200" placeholder="选填，英文逗号分隔"></div>
+    <div class="row"><label>网站简介</label><textarea id="f-desc" maxlength="300" placeholder="选填，一句话介绍你的网站"></textarea></div>
+    <div class="row" style="justify-content:flex-start">
+      <button id="btn-go" onclick="applyLink()">立即提交</button>
+      <a href="/" style="font-size:13px;color:#5b6b82;line-height:38px">收录规则：站点须合法合规，检测到回链自动过审</a>
+    </div>
+    <div id="go-tip" class="tip"></div>
+  </div>
+</div>
+<div class="footer">
+  卡券货源导航 · 仅收录第三方发卡站点 · 本站不卖货 / 无下单 / 无支付<br>
+  <a href="/">返回首页</a> · <a href="/admin.html" target="_blank">管理后台</a>
+</div>
+<script>
+function tip(el, ok, text){ var t = document.getElementById(el); t.className = 'tip ' + (ok ? 'ok' : 'warn'); t.textContent = text; }
+function domain(u){ try { return new URL(u).hostname; } catch(e){ return ''; } }
+async function fetchTdk(){
+  var url = document.getElementById('f-url').value.trim();
+  if(!url){ tip('tdk-tip', false, '请先填写网址'); return; }
+  var btn = document.getElementById('btn-tdk'); btn.disabled = true; btn.textContent = '获取中…';
+  try {
+    var r = await fetch('/api/links/fetch-tdk?url=' + encodeURIComponent(url));
+    var j = await r.json();
+    if(!r.ok){ tip('tdk-tip', false, j.error || '获取失败'); }
+    else {
+      document.getElementById('f-name').value = document.getElementById('f-name').value || (j.title || '').slice(0, 50);
+      document.getElementById('f-kw').value = document.getElementById('f-kw').value || (j.keywords || '');
+      document.getElementById('f-desc').value = document.getElementById('f-desc').value || (j.description || '');
+      tip('tdk-tip', true, '已自动获取网站 TDK 信息，请核对后提交');
+    }
+  } catch(e){ tip('tdk-tip', false, '获取失败，请检查网址是否可访问'); }
+  btn.disabled = false; btn.textContent = '获取TDK';
+}
+async function applyLink(){
+  var b = { url: document.getElementById('f-url').value.trim(), name: document.getElementById('f-name').value.trim(),
+            keywords: document.getElementById('f-kw').value.trim(), description: document.getElementById('f-desc').value.trim() };
+  if(!b.url || !b.name){ tip('go-tip', false, '请填写网址和网站名称'); return; }
+  var btn = document.getElementById('btn-go'); btn.disabled = true; btn.textContent = '提交中…';
+  try {
+    var r = await fetch('/api/links/apply', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) });
+    var j = await r.json();
+    if(!r.ok){ tip('go-tip', false, j.error || '提交失败'); }
+    else { tip('go-tip', true, j.message); if(j.status === 'approved') setTimeout(function(){ location.reload(); }, 1500); }
+  } catch(e){ tip('go-tip', false, '提交失败，请稍后重试'); }
+  btn.disabled = false; btn.textContent = '立即提交';
+}
+</script>
+</body>
+</html>`);
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // 浏览器默认请求 /favicon.ico：页面已用 data-URI 图标，这里直接 204 避免 404 报错
 app.get('/favicon.ico', (req, res) => res.status(204).end());
