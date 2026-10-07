@@ -304,15 +304,6 @@ app.post('/api/track', (req, res) => {
   res.json({ ok: true });
 });
 
-// 临时诊断接口：远程读取数据库同步失败原因（带密钥，验证完会删除）
-app.get('/api/persist-debug', (req, res) => {
-  if (String(req.query.key || '') !== 'kqdbg7x2k9') return res.status(403).json({ error: 'forbidden' });
-  const out = { token_set: !!process.env.GITHUB_PUSH_TOKEN, last_error: null, push_now: null };
-  try { out.last_error = require('./persist').lastError(); } catch (_) {}
-  try { out.push_now = require('./persist').push(); } catch (e) { out.push_now = 'THROW: ' + (e && e.message); }
-  res.json(out);
-});
-
 // 统计数据（首页展示）
 app.get('/api/stats', (req, res) => {
   const d = today();
