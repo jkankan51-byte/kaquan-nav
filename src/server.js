@@ -385,22 +385,15 @@ app.post('/api/detect-system', async (req, res) => {
   if (!/^https?:\/\//i.test(domain)) domain = 'https://' + domain;
   try {
     const u = new URL(domain);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), DETECT_TIMEOUT_MS);
-    let html = '';
-    try {
-      const r = await fetch(u.origin + '/', {
-        signal: ctrl.signal, redirect: 'follow',
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120', 'Accept': 'text/html' }
-      });
-      html = await r.text();
-    } finally { clearTimeout(timer); }
+    // 复用爬虫的 fetchPage：自动处理部分站点的 JS 跳转门禁
+    const html = await crawler.fetchPage(u.origin + '/', { headers: { 'Accept': 'text/html' } });
     const low = html.toLowerCase();
     let system = '', confident = false;
     if (low.includes('/assets/pc/') || low.includes('inside/getgoods') || low.includes('buygoods')) {
       system = '卡易信'; confident = true;
-    } else if (low.includes('front/diy')) {
-      // 同一模板族：HTML 带 kasushou 字样的是卡速售，否则卡商云（爬虫接口两者通用）
+    } else if (low.includes('front/diy') || low.includes('template/front/default')) {
+      // 同一模板族（签名密钥一致，爬虫接口通用）：default 是 diy 引擎换皮模板。
+      // HTML 带 kasushou 字样的是卡速售，否则卡商云
       system = low.includes('kasushou') ? '卡速售' : '卡商云'; confident = true;
     } else if (low.includes('卡卡云') || low.includes('kkayun') || low.includes('pbn.html')) {
       // 卡卡云：页脚"卡卡云商城"字样 / 官方域名字样 / 前台搜索页路由 /pg/{id}.html

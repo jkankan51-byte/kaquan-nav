@@ -23,7 +23,19 @@ function normalizeUrl(domain) {
   return u.replace(/\/+$/, '');
 }
 
-/** 带超时的请求（仅公开前台入口，不携带任何凭据） */
+/** 单次请求，返回 { ok, status, text, setCookies } */
+async function fetchOnce(url, { method, headers, body }, signal, cookie) {
+  const h = { ...headers };
+  if (cookie) h['Cookie'] = cookie;
+  const res = await fetch(url, { method, signal, redirect: 'follow', headers: h, body });
+  return { ok: res.ok, status: res.status, text: await res.text(), setCookies: res.headers.getSetCookie ? res.headers.getSetCookie() : [] };
+}
+
+/**
+ * 带超时的请求（仅公开前台入口，不携带任何凭据）。
+ * 自动处理部分发卡站的 JS 跳转门禁：首次访问返回 redirectjs_sign 跳转脚本，
+ * 需携带会话 Cookie 访问门禁 URL 后再重试原请求。
+ */
 async function fetchPage(url, { method = 'GET', contentType, body, extraHeaders } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -33,18 +45,27 @@ async function fetchPage(url, { method = 'GET', contentType, body, extraHeaders 
       'Accept': 'text/html,application/json,*/*',
       ...(extraHeaders || {})
     };
-    const opts = { method, signal: ctrl.signal, redirect: 'follow', headers };
-    if (body) {
-      // 规则里可用简写 'form' / 'json'，也允许直接写完整 MIME
+    let bodyStr = body;
+    if (bodyStr) {
       const MIME = { form: 'application/x-www-form-urlencoded', json: 'application/json' };
       headers['Content-Type'] = MIME[contentType] || contentType || 'application/x-www-form-urlencoded';
-      opts.body = body;
     }
-    const res = await fetch(url, opts);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    if (!text || text.length < 20) throw new Error('返回内容为空');
-    return text;
+    let r = await fetchOnce(url, { method, headers, body: bodyStr }, ctrl.signal, '');
+    // ---- JS 门禁闯关：识别跳转脚本，带 Cookie 走一遍门禁再重试 ----
+    const m = /redirectjs_sign=([A-Za-z0-9]+)(?:\\u0026|&|&amp;)redirectjs_time=(\d+)/.exec(r.text || '');
+    if (m && r.text.length < 1000) {
+      const origin = new URL(url).origin;
+      const cookies = r.setCookies.slice();
+      try {
+        const g = await fetchOnce(`${origin}/?redirectjs_sign=${m[1]}&redirectjs_time=${m[2]}`,
+          { method: 'GET', headers }, ctrl.signal, cookies.join('; '));
+        cookies.push(...g.setCookies);
+      } catch { /* 门禁失败不影响后续重试 */ }
+      r = await fetchOnce(url, { method, headers, body: bodyStr }, ctrl.signal, cookies.join('; '));
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.text || r.text.length < 20) throw new Error('返回内容为空');
+    return r.text;
   } finally {
     clearTimeout(timer);
   }
@@ -178,4 +199,4 @@ async function compare(keyword) {
   return data;
 }
 
-module.exports = { compare, CACHE_TTL_MS };
+module.exports = { compare, fetchPage, CACHE_TTL_MS };
