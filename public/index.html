@@ -4,12 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="baidu-site-verification" content="codeva-xEG7wwYZzc" />
-<title>卡券导航 - 虚拟/卡券一站式货源平台导航与比价工具</title>
-<meta name="description" content="卡券货源导航站：仅收录第三方发卡站点，提供站点导航与一键比价工具。本站不卖货、无下单、无支付、不接触卡密交易，所有交易均跳转第三方网站。">
-<meta name="keywords" content="卡券导航,发卡站导航,卡密货源,比价,货源导航">
+<title>卡券导航 - 发卡站货源导航与实时比价 | offclock.top</title>
+<meta name="description" content="卡券导航(offclock.top)收录卡易信、卡商云、卡速售、卡卡云、优权益等主流发卡站点，提供卡券货源导航与一键实时比价。仅做导航比价，不卖货、不接触卡密，交易均跳转第三方。">
+<meta name="keywords" content="卡券导航,发卡站导航,卡密货源,卡券比价,货源导航,卡易信,卡商云,卡速售,卡卡云,优权益">
+<link rel="canonical" href="https://offclock.top/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="卡券导航 - 发卡站货源导航与实时比价">
+<meta property="og:description" content="收录主流发卡站点，提供卡券货源导航与一键实时比价。">
+<meta property="og:url" content="https://offclock.top/">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232b7fff'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white'>卡</text></svg>">
 <meta name="referrer" content="always">
 <link rel="stylesheet" href="/style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "卡券导航",
+  "url": "https://offclock.top/",
+  "description": "卡券货源导航与实时比价，收录主流发卡站点。",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://offclock.top/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "卡券导航",
+  "url": "https://offclock.top/",
+  "logo": "https://offclock.top/favicon.ico"
+}
+</script>
 </head>
 <body>
 <div id="app" v-cloak>
@@ -48,7 +77,7 @@
         <div class="hero-main">
           <div class="hero-blob b1"></div><div class="hero-blob b2"></div>
           <div class="hero-badge">🔥 全站数据实时更新中</div>
-          <div class="hero-title">发现更可靠的<span class="hl">卡券货源</span></div>
+          <h1 class="hero-title">发现更可靠的<span class="hl">卡券货源</span></h1>
           <div class="hero-sub">实时查价 · 优质货源 · 安全可靠 · 高效对接</div>
           <div class="hero-desc">输入商品名称，一键获取所有开启比价站点的实时报价（本站仅导航比价，不参与任何交易）</div>
           <div class="hero-search">
@@ -83,7 +112,7 @@
       <!-- 实时站点报价结果 -->
       <div class="section" v-if="hq.loading || hq.done">
         <div class="section-head">
-          <div class="section-title">⚡ 实时站点报价</div>
+          <h2 class="section-title">⚡ 实时站点报价</h2>
           <span class="page-sub" v-if="hq.summary">
             关键词「{{ hq.kw }}」 · 成功 {{ hq.summary.ok }}/{{ hq.summary.total }} 站
             <a v-if="hq.cached" style="color:#d48806">（{{ cacheMin }} 分钟内缓存）</a>
@@ -135,7 +164,7 @@
       <!-- 推荐站点（横向滚动） -->
       <div class="section" v-if="home.recommended.length">
         <div class="section-head">
-          <div class="section-title">⭐ 推荐站点</div>
+          <h2 class="section-title">⭐ 推荐站点</h2>
         </div>
         <div class="scroll-x">
           <div class="site-card" v-for="s in home.recommended" :key="s.id" @click="goSite(s.id)">
@@ -154,7 +183,7 @@
       <!-- 卡券货源列表 -->
       <div class="section">
         <div class="section-head">
-          <div class="section-title">🎫 卡券货源</div>
+          <h2 class="section-title">🎫 卡券货源</h2>
           <a class="section-more" href="#/sites">更多站点 →</a>
         </div>
         <div class="grid-sites">

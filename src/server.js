@@ -200,6 +200,34 @@ app.get('/baidu_verify_codeva-xEG7wwYZzc.html', (req, res) => {
   res.type('html').send('codeva-xEG7wwYZzc');
 });
 
+// 站点地图 sitemap.xml（供百度/必应等搜索引擎定期抓取）
+app.get('/sitemap.xml', (req, res) => {
+  const base = 'https://offclock.top';
+  const urls = [
+    { loc: `${base}/`, pri: '1.0', freq: 'daily' },
+    { loc: `${base}/directory`, pri: '0.8', freq: 'daily' },
+  ];
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    urls.map(u => `  <url><loc>${u.loc}</loc><changefreq>${u.freq}</changefreq><priority>${u.pri}</priority></url>`).join('\n') +
+    '\n</urlset>';
+  res.type('application/xml').send(xml);
+});
+
+// 百度主动推送（需在环境变量 BAIDU_PUSH_TOKEN 配置接口 token；在站长平台「普通收录-API提交」获取）
+app.post('/api/seo/baidu-push', express.json(), (req, res) => {
+  const token = process.env.BAIDU_PUSH_TOKEN;
+  if (!token) return res.status(400).json({ ok: false, msg: '未配置 BAIDU_PUSH_TOKEN' });
+  const urls = Array.isArray(req.body.urls) ? req.body.urls : [];
+  if (!urls.length) return res.status(400).json({ ok: false, msg: 'urls 为空' });
+  const body = urls.join('\n');
+  const post = `http://data.zz.baidu.com/urls?site=offclock.top&token=${token}`;
+  fetch(post, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body })
+    .then(r => r.text())
+    .then(t => res.json({ ok: true, baidu: t }))
+    .catch(e => res.status(502).json({ ok: false, msg: String(e) }));
+});
+
 // ---------------- 简易后台登录鉴权（内存 token，重启失效，重新登录即可） ----------------
 const tokens = new Map(); // token -> expireAt
 const TOKEN_TTL = 12 * 60 * 60 * 1000;
