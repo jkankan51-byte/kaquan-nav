@@ -59,8 +59,14 @@ function configure() {
     git(['config', '--global', 'safe.directory', '*']);
     git(['config', '--global', 'user.email', 'bot@offclock.top']);
     git(['config', '--global', 'user.name', 'offclock-bot']);
-    if (TOKEN) git(['remote', 'set-url', 'origin', REMOTE]);
-  } catch (_) {}
+    if (TOKEN) {
+      // Render 容器里可能没有 origin 远程，set-url 会失败；先删再加保证一定存在
+      try { git(['remote', 'remove', 'origin']); } catch (_) {}
+      git(['remote', 'add', 'origin', REMOTE]);
+    }
+  } catch (e) {
+    console.error('⚠️ git 配置失败:', (e && e.message) || e);
+  }
 }
 
 function pull() {
