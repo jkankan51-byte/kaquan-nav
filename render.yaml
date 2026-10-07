@@ -19,8 +19,7 @@ services:
         sync: false          # 部署后在 Render 后台设置
       - key: ADMIN_PASSWORD
         sync: false          # 部署后在 Render 后台设置（务必改成强密码）
-    # 持久磁盘：挂载到 data 目录，保证 SQLite 数据库与 favicon 缓存重启不丢
-    disk:
-      name: kaquan-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+    # 免费档不支持持久磁盘（disks are not supported for free tier services）
+    # 数据库/图标缓存在 /opt/render/project/src/data（随实例临时存在）
+    # 注意：重新部署或休眠重启后数据会重置为种子数据（db.js 自动重建），站点/友链需重新录入
+    # 如需数据持久化，升级 paid 档后再补回 disk 配置
