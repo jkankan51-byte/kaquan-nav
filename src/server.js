@@ -24,8 +24,15 @@ app.use(express.json({ limit: '256kb' }));
 function escHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+// URL 规范化：没写协议头的自动补 https://，避免浏览器当成相对路径拼到本站域名后
+function normUrl(u) {
+  const s = String(u || '').trim();
+  if (!s) return s;
+  return /^https?:\/\//i.test(s) ? s : 'https://' + s.replace(/^\/+/, '');
+}
 function approvedLinks() {
-  return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC").all();
+  return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC")
+    .all().map(l => ({ ...l, url: normUrl(l.url) }));
 }
 // 首页"友情链接"分区（复用站内 site-card 卡片样式，服务端渲染对收录机器人可见）
 function homeLinksSection(links) {
@@ -660,13 +667,13 @@ app.post('/api/admin/links', adminAuth, (req, res) => {
   const { name, url, enabled = 1, status = 'approved' } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: '名称与链接必填' });
   const r = db.prepare("INSERT INTO links (name,url,enabled,status,title,keywords,description) VALUES (?,?,?,?,?,?,?)")
-    .run(name, url, +enabled, status === 'pending' ? 'pending' : 'approved', req.body.title || name, req.body.keywords || '', req.body.description || '');
+    .run(name, normUrl(url), +enabled, status === 'pending' ? 'pending' : 'approved', req.body.title || name, req.body.keywords || '', req.body.description || '');
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 app.put('/api/admin/links/:id', adminAuth, (req, res) => {
   const { name, url, enabled = 1, status = 'approved' } = req.body || {};
   db.prepare('UPDATE links SET name=?,url=?,enabled=?,status=? WHERE id=?')
-    .run(name, url, +enabled, status === 'pending' ? 'pending' : 'approved', req.params.id);
+    .run(name, normUrl(url), +enabled, status === 'pending' ? 'pending' : 'approved', req.params.id);
   res.json({ ok: true });
 });
 // 一键通过 / 驳回待审友链
