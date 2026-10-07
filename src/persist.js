@@ -97,7 +97,15 @@ function push() {
     if (!fs.existsSync(DB)) return false;
     const m = fs.statSync(DB).mtimeMs;
     if (m === lastMtime) return false; // 无变化
-    git(['add', '-f', 'data/kaquan.db', 'data/kaquan.db-wal', 'data/kaquan.db-shm']);
+    // 只 add 真实存在的文件（-wal/-shm 在容器里可能不存在，pathspec 不存在会导致整条 add 失败）
+    const files = ['data/kaquan.db', 'data/kaquan.db-wal', 'data/kaquan.db-shm']
+      .filter((f) => fs.existsSync(path.join(REPO, f)));
+    if (!files.length) return false;
+    git(['add', '-f', ...files]);
+    // 内容与上次完全相同时不产生空提交
+    let hasChanges = false;
+    try { git(['diff', '--cached', '--quiet']); } catch (_) { hasChanges = true; }
+    if (!hasChanges) { lastMtime = m; return false; }
     git(['commit', '-m', 'chore: auto-sync db ' + new Date().toISOString()]);
     git(['push', 'origin', BRANCH]);
     lastMtime = m;
