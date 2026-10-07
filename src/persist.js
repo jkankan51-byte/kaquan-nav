@@ -23,6 +23,7 @@ const REMOTE = `https://${OWNER}:${TOKEN}@github.com/${OWNER}/${REPO_NAME}.git`;
 
 let lastMtime = 0;
 let timer = null;
+let lastError = null; // 最近一次同步失败原因，供诊断接口读取
 
 function git(args) {
   // 绕过 Git for Windows 的凭据选择器（避免 push 卡住）；Linux(Render) 上无此工具，参数无害
@@ -112,7 +113,8 @@ function push() {
     console.log('✅ 数据库已同步回 GitHub');
     return true;
   } catch (e) {
-    console.error('❌ 数据库同步失败:', (e && e.message) || e); // 在 Render Logs 可见
+    lastError = (e && e.message) || String(e);
+    console.error('❌ 数据库同步失败:', lastError); // 在 Render Logs 可见
     return false;
   }
 }
@@ -132,4 +134,4 @@ function start() {
   console.log('✅ 数据库自动同步已启用（GITHUB_PUSH_TOKEN）');
 }
 
-module.exports = { bootstrap, start, push };
+module.exports = { bootstrap, start, push, lastError: () => lastError };
