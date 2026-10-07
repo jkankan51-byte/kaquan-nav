@@ -27,13 +27,19 @@ function escHtml(s) {
 function approvedLinks() {
   return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC").all();
 }
-// 友链胶囊 HTML（favicon + 名称）
-function linkPills(links) {
+// 首页页脚文字友链（收录机器人可见；后台友链管理里维护）
+function footerLinksHtml(links) {
+  return links.map(l => `<a href="${escHtml(l.url)}" target="_blank" title="${escHtml(l.name)}">${escHtml(l.name)}</a>`).join('\n        ');
+}
+// 目录页大卡片（仿首页"推荐站点"样式）
+function dirCards(links) {
   return links.map(l => {
     const d = linkDomain(l.url) || '';
-    return `<a class="dir-pill" href="${escHtml(l.url)}" target="_blank" title="${escHtml(l.name)}">` +
-      `<img src="/api/favicon?domain=${encodeURIComponent(d)}" alt="" loading="lazy" onerror="this.style.display='none'">` +
-      `<span>${escHtml(l.name)}</span></a>`;
+    const intro = escHtml(l.description || l.title || l.url);
+    return `<a class="dcard" href="${escHtml(l.url)}" target="_blank" rel="nofollow noopener">` +
+      `<div class="dcard-head"><img src="/api/favicon?domain=${encodeURIComponent(d)}" alt="" loading="lazy" onerror="this.style.display='none'">` +
+      `<span class="dcard-name">${escHtml(l.name)}</span><i class="dcard-tag">友链</i></div>` +
+      `<div class="dcard-intro">${intro}</div></a>`;
   }).join('\n');
 }
 
@@ -42,10 +48,10 @@ app.get('/', (req, res) => {
   try {
     let html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
     const links = approvedLinks();
-    const pills = links.length
-      ? linkPills(links)
-      : `<a class="dir-pill" href="/directory"><span>+ 申请收录</span></a>`;
-    html = html.replace('<!--FRIEND_LINKS-->', pills);
+    const foot = links.length
+      ? footerLinksHtml(links)
+      : `<a href="/directory">+ 申请收录</a>`;
+    html = html.replace('<!--FRIEND_LINKS-->', foot);
     res.type('html').send(html);
   } catch (e) {
     res.status(500).send('server error');
@@ -55,7 +61,7 @@ app.get('/', (req, res) => {
 // 独立友链目录页：全部友链 + 自助申请（服务端渲染）
 app.get('/directory', (req, res) => {
   const links = approvedLinks();
-  const pills = linkPills(links);
+  const cards = dirCards(links);
   res.type('html').send(`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -76,10 +82,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .notice .n-btn{background:#2b7fff;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;cursor:pointer;text-decoration:none}
 .wrap{max-width:1100px;margin:16px auto;width:calc(100% - 32px);flex:1}
 .sec-title{font-size:15px;font-weight:700;margin:14px 0 10px;color:#33445c}
-.dir-grid{display:flex;flex-wrap:wrap;gap:10px}
-.dir-pill{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e0e8f2;border-radius:999px;padding:8px 16px 8px 10px;text-decoration:none;color:#2b3c55;font-size:14px;transition:.15s;box-shadow:0 1px 2px rgba(30,60,120,.05)}
-.dir-pill:hover{border-color:#2b7fff;color:#2b7fff;transform:translateY(-1px)}
-.dir-pill img{width:20px;height:20px;border-radius:4px;object-fit:contain;background:#fff}
+.dir-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.dcard{background:#fff;border:1px solid #e5ecf5;border-radius:12px;padding:14px;text-decoration:none;color:inherit;transition:.15s;box-shadow:0 1px 3px rgba(30,60,120,.05)}
+.dcard:hover{border-color:#2b7fff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(43,127,255,.12)}
+.dcard-head{display:flex;align-items:center;gap:9px}
+.dcard-head img{width:38px;height:38px;border-radius:9px;object-fit:contain;background:#f4f7fb;border:1px solid #eef2f8;padding:3px}
+.dcard-name{font-size:15px;font-weight:700;color:#223;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dcard-tag{font-style:normal;background:#eaf3ff;color:#2b7fff;font-size:11px;border-radius:6px;padding:2px 7px;margin-left:auto;flex-shrink:0}
+.dcard-intro{font-size:12px;color:#8a99ad;margin-top:9px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .apply{background:#fff;border:1px solid #e5ecf5;border-radius:12px;padding:18px;margin-top:26px}
 .apply h3{font-size:16px;margin-bottom:12px;color:#223}
 .apply .row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
@@ -95,7 +105,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .tip.warn{display:block;background:#fff8ec;color:#c07a1d;border:1px solid #f0dcb4}
 .footer{text-align:center;font-size:12px;color:#8a99ad;padding:18px 0 26px;line-height:1.8}
 .footer a{color:#5b6b82;text-decoration:none}
-@media(max-width:600px){.dir-pill{padding:6px 12px 6px 8px;font-size:13px}}
 </style>
 </head>
 <body>
@@ -109,7 +118,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 </div>
 <div class="wrap">
   <div class="sec-title">🕘 最新加入（${links.length} 个站点）</div>
-  <div class="dir-grid">${pills || '<span style="color:#8a99ad;font-size:14px">暂无友链，快来抢占第一位</span>'}</div>
+  <div class="dir-grid">${cards || '<span style="color:#8a99ad;font-size:14px">暂无友链，快来抢占第一位</span>'}</div>
 
   <div class="apply" id="apply">
     <h3>✏️ 自助申请友链</h3>

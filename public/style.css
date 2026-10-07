@@ -210,11 +210,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; outline: none; 
 .footer-links a { color: var(--text-2); }
 .footer-links a:hover { color: var(--primary); }
 .footer-copy { text-align: center; color: #a8b6c8; font-size: 11px; margin-top: 12px; }
-/* 页脚友链条（服务端注入，后台友链管理里维护） */
-.footer-dir { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
-.footer-dir .dir-pill { display: inline-flex; align-items: center; gap: 6px; background: #f5f8fc; border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px 5px 8px; color: #5b6b82; font-size: 12px; text-decoration: none; transition: .15s; }
-.footer-dir .dir-pill:hover { color: var(--primary); border-color: var(--primary); }
-.footer-dir .dir-pill img { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; background: #fff; }
 
 /* ---------- 通用页面头 ---------- */
 .page-head { margin: 20px 0 14px; }
