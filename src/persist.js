@@ -15,7 +15,7 @@ const path = require('path');
 
 const REPO = path.join(__dirname, '..');
 const DB = path.join(REPO, 'data', 'kaquan.db');
-const TOKEN = process.env.GITHUB_PUSH_TOKEN || '';
+const TOKEN = (process.env.GITHUB_PUSH_TOKEN || '').trim();
 const OWNER = 'jkankan51-byte';
 const REPO_NAME = 'kaquan-nav';
 const BRANCH = 'main';
@@ -28,12 +28,30 @@ function git(args) {
   // 绕过 Git for Windows 的凭据选择器（避免 push 卡住）；Linux(Render) 上无此工具，参数无害
   const full = ['-c', 'credential.helper=', '-c', 'credential.helperselector=', ...args];
   try {
-    execFileSync('git', full, { cwd: REPO, stdio: 'ignore', timeout: 30000 });
+    execFileSync('git', full, { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
   } catch (e) {
-    // 带上 stderr 方便在 Render Logs 里定位（如 token 无效/无权限）
-    const stderr = (e.stderr && e.stderr.toString()) || e.message;
+    // 捕获 git stderr，方便在 Render Logs 里定位真实原因（token 无效/无权限/网络等）
+    const stderr = (e.stderr && String(e.stderr).trim()) || e.message;
     throw new Error(`git ${args[0]} 失败: ${stderr.slice(0, 300)}`);
   }
+}
+
+// 启动时自检 token：直接调 GitHub API，好坏一目了然
+function checkToken() {
+  if (!TOKEN) return;
+  const req = require('https').request(
+    { hostname: 'api.github.com', path: `/repos/${OWNER}/${REPO_NAME}`, method: 'GET', headers: { 'Authorization': `Bearer ${TOKEN}`, 'User-Agent': 'kaquan-nav' } },
+    (res) => {
+      if (res.statusCode === 200) console.log('✅ GITHUB_PUSH_TOKEN 自检通过（API 200）');
+      else {
+        let body = '';
+        res.on('data', (c) => (body += c));
+        res.on('end', () => console.error(`❌ GITHUB_PUSH_TOKEN 自检失败: HTTP ${res.statusCode} ${body.slice(0, 200)}`));
+      }
+    }
+  );
+  req.on('error', (e) => console.error('❌ GITHUB_PUSH_TOKEN 自检网络错误:', e.message));
+  req.end();
 }
 
 function configure() {
@@ -61,6 +79,7 @@ function bootstrap() {
     return;
   }
   configure();
+  checkToken();
   pull();
 }
 
