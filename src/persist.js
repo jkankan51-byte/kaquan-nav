@@ -92,7 +92,13 @@ function bootstrap() {
   pull();
 }
 
+// PG 模式以 db.js 实际连接结果为准（连接失败回退 SQLite 时仍走 git 同步）
+function pgActive() {
+  try { return !!require('./db').__pgMode; } catch (_) { return false; }
+}
+
 function push() {
+  if (pgActive()) return false;
   if (!TOKEN) return false;
   try {
     // WAL 模式下数据可能在 -wal 文件，先落盘到主库再提交
@@ -122,6 +128,10 @@ function push() {
 }
 
 function start() {
+  if (pgActive()) {
+    console.log('✅ Postgres 模式：数据持久化由数据库负责，git 同步已停用');
+    return;
+  }
   if (!TOKEN) {
     return;
   }
