@@ -115,6 +115,37 @@ CREATE TABLE IF NOT EXISTS stats_referrers ( -- 访问来源归因（友链 / �
 );
 `;
 
+// 卡易信供货对接：商品（从卡易信拉取/同步）+ 订单（前台下单、回调写回）
+const DDL_SUPPLY = `
+CREATE TABLE IF NOT EXISTS kx_products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ext_id TEXT,                                -- 卡易信侧商品/规格 ID
+  name TEXT DEFAULT '',
+  face_value TEXT DEFAULT '',                 -- 面值/规格描述
+  price REAL DEFAULT 0,                        -- 供货价
+  stock INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'on',                   -- on 在售 / off 下架
+  category TEXT DEFAULT '',
+  raw TEXT DEFAULT '',                         -- 原始响应 JSON（便于后续映射调整）
+  synced_at TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS kx_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_no TEXT UNIQUE,                        -- 本站订单号（clientOrderRef）
+  ext_order_no TEXT DEFAULT '',               -- 卡易信侧订单号（platformOrderRef）
+  product_ext_id TEXT DEFAULT '',
+  product_name TEXT DEFAULT '',
+  account TEXT DEFAULT '',                     -- 充值账号
+  amount REAL DEFAULT 0,
+  status TEXT DEFAULT 'pending',              -- pending / processing / success / failed / canceled
+  ext_status TEXT DEFAULT '',
+  recharge_result TEXT DEFAULT '',            -- 充值结果文案
+  callback_raw TEXT DEFAULT '',              -- 原始回调 JSON
+  created_at TEXT DEFAULT '',
+  updated_at TEXT DEFAULT ''
+);
+`;
+
 const ALTER_COLS_SITES = ['clicks INTEGER DEFAULT 0', 'recommended INTEGER DEFAULT 1'];
 const ALTER_COLS_LINKS = ['title TEXT DEFAULT \'\'', 'keywords TEXT DEFAULT \'\'', 'description TEXT DEFAULT \'\'', "status TEXT DEFAULT 'approved'"];
 
@@ -140,8 +171,9 @@ if (PG_MODE) {
       `CREATE TABLE IF NOT EXISTS stats_visitors (day TEXT, visitor TEXT, seen_at TEXT DEFAULT '', PRIMARY KEY (day, visitor))`,
       `CREATE TABLE IF NOT EXISTS stats_total (id INTEGER PRIMARY KEY CHECK (id=1), pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0)`,
       `CREATE TABLE IF NOT EXISTS stats_referrers (dim TEXT PRIMARY KEY, name TEXT DEFAULT '', pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0, last_at TEXT DEFAULT '')`,
+      ...DDL_SUPPLY.split(';').map(s => s.trim()).filter(Boolean),
     ]) {
-      try { pgstore.exec(stmt); } catch (e) { console.error('❌ stats 建表失败:', stmt.slice(0, 30), '->', e.message); }
+      try { pgstore.exec(stmt); } catch (e) { console.error('❌ 建表失败:', stmt.slice(0, 30), '->', e.message); }
     }
     // 幂等补列：stats_visitors 记录 IP 与最近访问时间
     for (const col of [`ALTER TABLE stats_visitors ADD COLUMN IF NOT EXISTS ip TEXT DEFAULT ''`,
@@ -165,6 +197,7 @@ if (!db) {
   for (const col of ALTER_COLS_SITES) { try { db.exec(`ALTER TABLE sites ADD COLUMN ${col};`); } catch (_) {} }
   for (const col of ALTER_COLS_LINKS) { try { db.exec(`ALTER TABLE links ADD COLUMN ${col};`); } catch (_) {} }
   db.exec(DDL_STATS);
+  db.exec(DDL_SUPPLY);
   for (const col of ['ip', 'last_at']) { try { db.exec(`ALTER TABLE stats_visitors ADD COLUMN ${col} TEXT DEFAULT '';`); } catch (_) {} }
 }
 

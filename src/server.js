@@ -801,6 +801,57 @@ app.post('/api/admin/reports/:id/resolve', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ==================== 卡易信供货对接 ====================
+const kayixin = require('./kayixin');
+
+// 后台：一键同步商品（需管理员）
+app.post('/api/kayixin/sync', adminAuth, async (req, res) => {
+  try {
+    if (!kayixin.isConfigured()) return res.status(400).json({ error: '卡易信未配置（环境变量 KAYIXIN_BASE_URL / KAYIXIN_APPKEY / KAYIXIN_APPSECRET）' });
+    const r = await kayixin.syncProducts();
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 后台：商品列表 / 订单列表（需管理员）
+app.get('/api/kayixin/products', adminAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM kx_products ORDER BY id DESC LIMIT 500').all());
+});
+app.get('/api/kayixin/orders', adminAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM kx_orders ORDER BY id DESC LIMIT 200').all());
+});
+
+// 前台：用户下单（公开）。body: { productExtId, account, amount }
+app.post('/api/kayixin/order', express.json(), async (req, res) => {
+  try {
+    if (!kayixin.isConfigured()) return res.status(400).json({ error: '本站供货通道暂未配置' });
+    const { productExtId, account, amount } = req.body || {};
+    if (!productExtId || !account) return res.status(400).json({ error: '缺少商品或充值账号' });
+    const clientOrderRef = 'KX' + Date.now() + Math.random().toString(36).slice(2, 8);
+    const host = req.headers.host || 'offclock.top';
+    const proto = (req.headers['x-forwarded-proto'] || 'https');
+    const notifyUrl = `${proto}://${host}/api/kayixin/notify`;
+    const r = await kayixin.createOrder({ productExtId, account, amount, clientOrderRef, notifyUrl });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 卡易信订单状态回调（公开 webhook）
+app.post('/api/kayixin/notify', express.json(), (req, res) => {
+  const body = req.body || {};
+  if (!kayixin.verifyNotify(body)) return res.status(403).json({ error: '签名校验失败' });
+  const r = kayixin.applyNotify(body);
+  res.json(r.ok ? { ok: true } : { error: r.msg });
+});
+
+// 后台：主动轮询某订单状态（webhook 兜底）
+app.post('/api/kayixin/orders/:ref/refresh', adminAuth, async (req, res) => {
+  try {
+    const r = await kayixin.queryOrder(req.params.ref);
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== SEO ====================
 
 app.get('/robots.txt', (req, res) => {

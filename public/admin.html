@@ -301,6 +301,52 @@ body { background: #eef4fb; }
         </table>
       </div>
     </div>
+
+    <!-- ===== 卡易信供货对接 ===== -->
+    <div class="admin-panel" v-if="tab==='supply'">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0;font-size:15px">卡易信商品（一键同步自供货方）</h3>
+        <button style="background:#2b7fff;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer" @click="syncKayixin">同步商品</button>
+      </div>
+      <div v-if="kxMsg" style="margin-bottom:10px;color:#1a7f43">{{ kxMsg }}</div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>商品ID</th><th>名称</th><th>面值/规格</th><th>供货价</th><th>库存</th><th>状态</th><th>同步时间</th></tr></thead>
+          <tbody>
+            <tr v-for="p in kxProducts" :key="p.id">
+              <td style="font-family:monospace">{{ p.ext_id }}</td>
+              <td>{{ p.name }}</td>
+              <td>{{ p.face_value }}</td>
+              <td>¥{{ p.price }}</td>
+              <td>{{ p.stock }}</td>
+              <td>{{ p.status==='on' ? '在售' : '下架' }}</td>
+              <td>{{ p.synced_at || '—' }}</td>
+            </tr>
+            <tr v-if="!kxProducts.length"><td colspan="7" style="text-align:center;color:var(--text-2)">尚未同步商品。点击右上"同步商品"从卡易信拉取（需先在服务端配置 KAYIXIN_* 环境变量）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:20px 0 8px;font-size:15px">订单（用户下单 / 卡易信回调）</h3>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>本站单号</th><th>供货单号</th><th>商品</th><th>充值账号</th><th>金额</th><th>状态</th><th>充值结果</th><th>更新时间</th></tr></thead>
+          <tbody>
+            <tr v-for="o in kxOrders" :key="o.id">
+              <td style="font-family:monospace">{{ o.order_no }}</td>
+              <td>{{ o.ext_order_no || '—' }}</td>
+              <td>{{ o.product_name || o.product_ext_id }}</td>
+              <td>{{ o.account }}</td>
+              <td>¥{{ o.amount }}</td>
+              <td>{{ orderBadge(o.status) }}</td>
+              <td style="max-width:200px">{{ o.recharge_result || '—' }}</td>
+              <td>{{ o.updated_at || '—' }}</td>
+            </tr>
+            <tr v-if="!kxOrders.length"><td colspan="8" style="text-align:center;color:var(--text-2)">暂无订单</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -322,8 +368,12 @@ createApp({
       { key: 'banners', name: '广告横幅' },
       { key: 'links', name: '友链管理' },
       { key: 'stats', name: '访问统计' },
-      { key: 'reports', name: '举报/反馈' }
+      { key: 'reports', name: '举报/反馈' },
+      { key: 'supply', name: '卡易信供货' }
     ];
+    const kxProducts = ref([]);
+    const kxOrders = ref([]);
+    const kxMsg = ref('');
     let savedToken = ''; try { savedToken = localStorage.getItem('admin_token') || ''; } catch (_) {}
     const token = ref(savedToken);
     const tab = ref('sites');
@@ -502,7 +552,22 @@ createApp({
       showToast('已删除'); MAP[kind]();
     }
 
-    function switchTab(k) { tab.value = k; ({ sites: loadSites, submissions: loadSubs, crawler: loadLogs, announcements: loadAnns, banners: loadBanners, links: loadLinks, stats: loadStats, reports: loadReports })[k](); }
+    function switchTab(k) { tab.value = k; ({ sites: loadSites, submissions: loadSubs, crawler: loadLogs, announcements: loadAnns, banners: loadBanners, links: loadLinks, stats: loadStats, reports: loadReports, supply: loadSupply })[k](); }
+    function loadSupply() {
+      api('/api/kayixin/products').then(r => { kxProducts.value = r || []; }).catch(() => {});
+      api('/api/kayixin/orders').then(r => { kxOrders.value = r || []; }).catch(() => {});
+    }
+    async function syncKayixin() {
+      kxMsg.value = '';
+      try {
+        const r = await api('/api/kayixin/sync', { method: 'POST' });
+        kxMsg.value = `同步完成：新增 ${r.added} / 更新 ${r.updated} / 共 ${r.total} 条`;
+        loadSupply();
+      } catch (e) { kxMsg.value = '同步失败：' + (e.message || e); }
+    }
+    function orderBadge(s) {
+      return ({ pending: '待处理', processing: '处理中', success: '成功', failed: '失败', canceled: '已取消' })[s] || s || '—';
+    }
     function loadAll() { loadSites(); }
 
     onMounted(() => { if (token.value) loadAll(); });
@@ -514,7 +579,8 @@ createApp({
       crawler, failOnly, loadLogs,
       announcements, annForm, saveAnn, banners, banForm, saveBanner,
       links, linkForm, saveLink, reviewLink, fetchLinkTdk, editAnn, editBan, editLink, reports, resolveReport, delItem, switchTab,
-      origin, stats, referrers, loadStats, refName, refType, copyLink, visitors, resetStats
+      origin, stats, referrers, loadStats, refName, refType, copyLink, visitors, resetStats,
+      kxProducts, kxOrders, kxMsg, syncKayixin, orderBadge
     };
   }
 }).mount('#app');
