@@ -49,24 +49,28 @@ function approvedLinks() {
   return db.prepare("SELECT * FROM links WHERE enabled=1 AND status='approved' ORDER BY id DESC")
     .all().map(l => ({ ...l, url: normUrl(l.url) }));
 }
-// 首页"友情链接"分区（复用站内 site-card 卡片样式，服务端渲染对收录机器人可见）
+// 首页"友情链接"分区（紧凑小链接样式，服务端渲染对收录机器人可见）
 function homeLinksSection(links) {
   if (!links.length) return '';
-  const cards = links.map(l => {
+  const items = links.map(l => {
     const d = linkDomain(l.url) || '';
-    const intro = escHtml(l.description || l.title || '友情链接站点');
-    return `<a class="site-card" href="${escHtml(l.url)}" target="_blank" rel="nofollow noopener" style="text-decoration:none;color:inherit">` +
-      `<div class="site-card-head"><div class="site-logo" style="background:#eaf3ff">🔗` +
-      `<img class="site-logo-img" src="/api/favicon?domain=${encodeURIComponent(d)}" onerror="this.remove()" alt="" /></div>` +
-      `<div style="min-width:0"><div class="site-name">${escHtml(l.name)}</div></div></div>` +
-      `<div class="site-intro">${intro}</div></a>`;
-  }).join('\n');
+    return `<a class="flink-item" href="${escHtml(l.url)}" target="_blank" rel="nofollow noopener" title="${escHtml(l.description || l.name)}">` +
+      `<img src="/api/favicon?domain=${encodeURIComponent(d)}" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'" alt="" />` +
+      `<span>${escHtml(l.name)}</span></a>`;
+  }).join('');
   return `<div class="section">
+        <style>
+        .flinks{display:flex;flex-wrap:wrap;gap:6px 8px;background:#fff;border:1px solid #e5ecf5;border-radius:12px;padding:12px}
+        .flink-item{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#445b78;text-decoration:none;padding:4px 9px;border-radius:8px;background:#f6f9fd;border:1px solid #eef3fa;max-width:160px;transition:.15s}
+        .flink-item:hover{color:#2b7fff;border-color:#bcd7ff;background:#eef5ff}
+        .flink-item img{width:15px;height:15px;border-radius:3px;object-fit:contain;flex-shrink:0}
+        .flink-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        </style>
         <div class="section-head">
           <div class="section-title">🔗 友情链接</div>
           <a class="section-more" href="/directory">更多友链 →</a>
         </div>
-        <div class="grid-sites">${cards}</div>
+        <div class="flinks">${items}</div>
       </div>`;
 }
 
@@ -329,18 +333,23 @@ app.post('/api/track', (req, res) => {
   res.json({ ok: true });
 });
 
-// 统计数据（首页展示 + 后台来源面板）
+// 统计数据（首页展示 + 后台来源面板）。加 3 秒微缓存：前端每 30 秒轮询 + 多访客并发，
+// 每次都打 PG 会占用同步查询通道，短缓存显著降低阻塞。
+let statsCache = null, statsCacheAt = 0;
 app.get('/api/stats', (req, res) => {
+  if (statsCache && Date.now() - statsCacheAt < 3000) return res.json(statsCache);
   const d = today();
   const day = db.prepare('SELECT pv, uv FROM stats_daily WHERE day=?').get(d) || { pv: 0, uv: 0 };
   const total = db.prepare('SELECT pv, uv FROM stats_total WHERE id=1').get() || { pv: 0, uv: 0 };
   const referrers = db.prepare('SELECT dim, name, pv, uv, last_at FROM stats_referrers ORDER BY pv DESC LIMIT 30').all();
-  res.json({
+  statsCache = {
     online: presence.size,
     today_pv: day.pv, today_uv: day.uv,
     total_pv: total.pv, total_uv: total.uv,
     referrers
-  });
+  };
+  statsCacheAt = Date.now();
+  res.json(statsCache);
 });
 
 // 站点点击量 +1（点击"前往/直达"时由前端调用）
@@ -445,7 +454,11 @@ app.get('/api/favicon', async (req, res) => {
   if (!domain) return res.status(400).json({ error: '缺少 domain' });
   try {
     const file = await favicon.getFavicon(domain);
-    if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'no favicon' });
+    if (!file || !fs.existsSync(file)) {
+      // 负缓存已挡住重复抓取；这里再让浏览器 10 分钟内别反复问 404
+      res.setHeader('Cache-Control', 'public, max-age=600');
+      return res.status(404).json({ error: 'no favicon' });
+    }
     const buf = fs.readFileSync(file);
     const ext = path.extname(file).toLowerCase();
     res.setHeader('Content-Type', FAV_CT[ext] || 'application/octet-stream');

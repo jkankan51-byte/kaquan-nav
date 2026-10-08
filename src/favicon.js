@@ -20,7 +20,27 @@ const CACHE_DIR = path.join(ROOT, 'data', 'favicons');
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const TIMEOUT = 8000;
+const TIMEOUT = 5000;
+
+// ---------- 性能保护 ----------
+// 1) 抓取中去重：同一域名的并发请求共享同一次抓取，避免重复出站请求风暴
+const inflight = new Map();
+// 2) 负缓存：抓不到图标的域名 10 分钟内不再重试（此前每个访客都触发 8-24s 的重复抓取，拖垮免费实例）
+const NEG_TTL = 10 * 60 * 1000;
+const negCache = new Map(); // domain -> 失败时间戳
+// 3) 全局并发上限：同时最多 4 个域名的抓取在跑，其余排队
+const MAX_CONCURRENT = 4;
+let running = 0;
+const waitQueue = [];
+function acquire() {
+  if (running < MAX_CONCURRENT) { running++; return Promise.resolve(); }
+  return new Promise(resolve => waitQueue.push(resolve));
+}
+function release() {
+  running--;
+  const next = waitQueue.shift();
+  if (next) { running++; next(); }
+}
 
 // 内容类型 -> 扩展名
 const EXT_BY_CT = {
@@ -124,7 +144,7 @@ async function grabFromHomepage(domain) {
       signal: htmlCtrl.signal, redirect: 'follow',
       headers: { 'User-Agent': UA, 'Accept': 'text/html' }
     });
-    if (resp.ok) html = await resp.text();
+    if (resp.ok) html = (await resp.text()).slice(0, 200000); // 只解析前 200KB，超大首页不浪费带宽
   } catch { /* ignore */ } finally { clearTimeout(t); }
 
   if (!html) return null;
@@ -164,26 +184,43 @@ async function getFavicon(rawDomain) {
   const cached = findCached(domain);
   if (cached) return cached;
 
-  let got = null;
-  // 1) 首页解析 link icon（优先拿大尺寸高清图标）
-  got = await grabFromHomepage(domain);
-  // 2) 兜底 /favicon.ico
-  if (!got || !pickExt(got.buf, got.ct)) {
-    got = await fetchBytes(`https://${domain}/favicon.ico`);
-    if (!got) got = await fetchBytes(`http://${domain}/favicon.ico`);
-  }
+  // 负缓存命中：近期确认无图标，直接放弃（响应 404 让前端回退字母头像）
+  const negAt = negCache.get(domain);
+  if (negAt && Date.now() - negAt < NEG_TTL) return null;
 
-  if (!got) return null;
-  const ext = pickExt(got.buf, got.ct);
-  if (!ext) return null;
+  // 抓取中去重：并发请求复用同一个 Promise
+  if (inflight.has(domain)) return inflight.get(domain);
 
-  const file = cacheFile(domain) + '.' + ext;
-  try {
-    fs.writeFileSync(file, got.buf);
-    return file;
-  } catch {
-    return null;
-  }
+  const task = (async () => {
+    await acquire();
+    try {
+      let got = null;
+      // 1) 首页解析 link icon（优先拿大尺寸高清图标）
+      got = await grabFromHomepage(domain);
+      // 2) 兜底 /favicon.ico
+      if (!got || !pickExt(got.buf, got.ct)) {
+        got = await fetchBytes(`https://${domain}/favicon.ico`);
+        if (!got) got = await fetchBytes(`http://${domain}/favicon.ico`);
+      }
+
+      if (!got) { negCache.set(domain, Date.now()); return null; }
+      const ext = pickExt(got.buf, got.ct);
+      if (!ext) { negCache.set(domain, Date.now()); return null; }
+
+      const file = cacheFile(domain) + '.' + ext;
+      try {
+        fs.writeFileSync(file, got.buf);
+        return file;
+      } catch {
+        return null;
+      }
+    } finally {
+      release();
+      inflight.delete(domain);
+    }
+  })();
+  inflight.set(domain, task);
+  return task;
 }
 
 module.exports = { getFavicon, safeDomain, CACHE_DIR };

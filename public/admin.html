@@ -17,7 +17,7 @@ body { background: #eef4fb; }
 .tab { padding: 8px 16px; border-radius: 10px 10px 0 0; background: #dde9f7; color: var(--text-2); cursor: pointer; font-weight: 600; font-size: 13px; }
 .tab.active { background: #fff; color: var(--primary); box-shadow: var(--shadow); }
 .admin-panel { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; overflow-x: auto; }
-.op-btn { padding: 4px 10px; border-radius: 6px; font-size: 12px; margin-right: 6px; margin-bottom: 4px; display: inline-block; }
+.op-btn { padding: 4px 10px; border-radius: 6px; font-size: 12px; margin-right: 6px; margin-bottom: 4px; display: inline-block; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 .op-edit { background: var(--primary-light); color: var(--primary); cursor: pointer; }
 .op-del { background: #fdeaea; color: var(--danger); cursor: pointer; }
 .op-ok { background: #e9f9f1; color: var(--ok); cursor: pointer; }
@@ -177,7 +177,7 @@ body { background: #eef4fb; }
           <tbody>
             <tr v-for="a in announcements" :key="a.id">
               <td>{{ a.id }}</td><td><b>{{ a.title }}</b></td><td style="max-width:320px">{{ a.content }}</td><td>{{ a.enabled ? '✅' : '—' }}</td>
-              <td><span class="op-btn op-edit" @click="annForm={...a, enabled: !!a.enabled}">编辑</span><span class="op-btn op-del" @click="delItem('announcements', a.id)">删除</span></td>
+              <td><span class="op-btn op-edit" @click="editAnn(a)">编辑</span><span class="op-btn op-del" @click="delItem('announcements', a.id)">删除</span></td>
             </tr>
           </tbody>
         </table>
@@ -200,7 +200,7 @@ body { background: #eef4fb; }
           <tbody>
             <tr v-for="b in banners" :key="b.id">
               <td>{{ b.id }}</td><td><span class="banner-tag">{{ b.tag }}</span></td><td><b>{{ b.text }}</b></td><td>{{ b.link }}</td><td>{{ b.sort }}</td><td>{{ b.enabled ? '✅' : '—' }}</td>
-              <td><span class="op-btn op-edit" @click="banForm={...b, enabled: !!b.enabled}">编辑</span><span class="op-btn op-del" @click="delItem('banners', b.id)">删除</span></td>
+              <td><span class="op-btn op-edit" @click="editBan(b)">编辑</span><span class="op-btn op-del" @click="delItem('banners', b.id)">删除</span></td>
             </tr>
           </tbody>
         </table>
@@ -225,7 +225,7 @@ body { background: #eef4fb; }
               <td><span :class="l.status==='pending' ? 'tag-warn' : ''">{{ l.status==='pending' ? '⏳ 待审' : '✅ 通过' }}</span></td>
               <td>{{ l.enabled ? '✅' : '—' }}</td>
               <td>
-                <span class="op-btn op-edit" @click="linkForm={...l, enabled: !!l.enabled, status: l.status || 'approved'}">编辑</span>
+                <span class="op-btn op-edit" @click="editLink(l)">编辑</span>
                 <span class="op-btn op-edit" @click="fetchLinkTdk(l.id)">获取TDK</span>
                 <span class="op-btn op-edit" v-if="l.status==='pending'" @click="reviewLink(l.id, 'approved')">通过</span>
                 <span class="op-btn op-del" v-else @click="reviewLink(l.id, 'pending')">驳回</span>
@@ -412,6 +412,10 @@ createApp({
     const links = ref([]);
     const linkForm = reactive({ id: 0, name: '', url: '', enabled: true, status: 'approved' });
     async function loadLinks() { links.value = await api('/api/admin/links'); }
+    // 编辑回填：用 Object.assign 原地更新 reactive 表单（模板里整体赋值 reactive 会静默失效）
+    const editAnn = a => Object.assign(annForm, { id: a.id, title: a.title, content: a.content, enabled: !!a.enabled });
+    const editBan = b => Object.assign(banForm, { id: b.id, tag: b.tag || '推荐', text: b.text, link: b.link, sort: +b.sort || 0, enabled: !!b.enabled });
+    const editLink = l => Object.assign(linkForm, { id: l.id, name: l.name, url: l.url, enabled: !!l.enabled, status: l.status || 'approved' });
     async function saveLink() {
       if (!linkForm.name || !linkForm.url) return showToast('名称与链接必填', true);
       const body = JSON.stringify({ ...linkForm, enabled: linkForm.enabled ? 1 : 0 });
@@ -477,7 +481,7 @@ createApp({
       submissions, review, rejectWithReason,
       crawler, failOnly, loadLogs,
       announcements, annForm, saveAnn, banners, banForm, saveBanner,
-      links, linkForm, saveLink, reviewLink, fetchLinkTdk, reports, resolveReport, delItem, switchTab,
+      links, linkForm, saveLink, reviewLink, fetchLinkTdk, editAnn, editBan, editLink, reports, resolveReport, delItem, switchTab,
       origin, stats, referrers, loadStats, refName, refType, copyLink
     };
   }

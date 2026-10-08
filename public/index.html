@@ -170,7 +170,7 @@
         <div class="scroll-x">
           <div class="site-card" v-for="s in home.recommended" :key="s.id" @click="goSite(s.id)">
             <div class="site-card-head">
-              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" loading="lazy" decoding="async" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
               <div style="min-width:0">
                 <div class="site-name">{{ s.name }}</div>
                 <span class="site-system">{{ s.system }}</span>
@@ -190,7 +190,7 @@
         <div class="grid-sites">
           <div class="site-card" v-for="s in home.featured" :key="s.id" @click="goSite(s.id)">
             <div class="site-card-head">
-              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+              <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" loading="lazy" decoding="async" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
               <div style="min-width:0">
                 <div class="site-name">{{ s.name }}</div>
                 <span class="site-system">{{ s.system }}</span>
@@ -235,7 +235,7 @@
       <div class="grid-sites" v-else-if="sitesList.length">
         <div class="site-card" v-for="s in sitesList" :key="s.id" @click="goSite(s.id)">
           <div class="site-card-head">
-            <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
+            <div class="site-logo" :style="{background:s.logo_color}">{{ s.name[0] }}<img class="site-logo-img" loading="lazy" decoding="async" :src="`/api/favicon?domain=${encodeURIComponent(s.domain)}`" @error="e=>e.target.remove()" alt="" /></div>
             <div style="min-width:0">
               <div class="site-name">{{ s.name }}</div>
               <span class="site-system">{{ s.system }}</span>
