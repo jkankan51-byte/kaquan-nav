@@ -315,13 +315,15 @@ app.post('/api/track', (req, res) => {
                 ON CONFLICT(day) DO UPDATE SET pv = stats_daily.pv + 1, uv = stats_daily.uv + ?`)
       .run(d, isNew ? 1 : 0, isNew ? 1 : 0);
     db.prepare('UPDATE stats_total SET pv = pv + 1, uv = uv + ? WHERE id = 1').run(isNew ? 1 : 0);
-    // 来源归因写入（兼容 SQLite/PG 的 upsert 语法）
+    // 来源归因写入：先 UPDATE（存在则累加）后 INSERT（不存在则建，catch 兜底并发冲突）
     if (dim) {
       const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      db.prepare(`INSERT INTO stats_referrers (dim, name, pv, uv, last_at)
-                  VALUES (?,?,1,?,?) ON CONFLICT(dim) DO UPDATE
-                  SET pv = stats_referrers.pv + 1, uv = stats_referrers.uv + ?, name = excluded.name, last_at = ?`)
-        .run(dim, name, isNew ? 1 : 0, nowStr, isNew ? 1 : 0, nowStr);
+      db.prepare('UPDATE stats_referrers SET pv = pv + 1, uv = uv + ?, name = ?, last_at = ? WHERE dim = ?')
+        .run(isNew ? 1 : 0, name, nowStr, dim);
+      try {
+        db.prepare('INSERT INTO stats_referrers (dim, name, pv, uv, last_at) VALUES (?,?,?,?,?)')
+          .run(dim, name, 1, isNew ? 1 : 0, nowStr);
+      } catch (_) { /* 并发插入主键冲突，忽略 */ }
     }
   }
   res.json({ ok: true });
