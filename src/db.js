@@ -134,8 +134,15 @@ if (PG_MODE) {
     // PG 已有数据时 doMigrate 会跳过 DDL，这里幂等补列（PG 支持 IF NOT EXISTS）
     for (const col of ALTER_COLS_SITES) { try { pgstore.exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
     for (const col of ALTER_COLS_LINKS) { try { pgstore.exec(`ALTER TABLE links ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
-    // 幂等建来源统计表（doMigrate 在 PG 已有数据时会跳过整个 DDL）
-    try { pgstore.exec(`CREATE TABLE IF NOT EXISTS stats_referrers (dim TEXT PRIMARY KEY, name TEXT DEFAULT '', pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0, last_at TEXT DEFAULT '')`); } catch (_) {}
+    // 幂等建所有 stats 表（doMigrate 在 PG 已有数据时会跳过整个 DDL_STATS，靠这里兜底）
+    for (const stmt of [
+      `CREATE TABLE IF NOT EXISTS stats_daily (day TEXT PRIMARY KEY, pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0)`,
+      `CREATE TABLE IF NOT EXISTS stats_visitors (day TEXT, visitor TEXT, seen_at TEXT DEFAULT '', PRIMARY KEY (day, visitor))`,
+      `CREATE TABLE IF NOT EXISTS stats_total (id INTEGER PRIMARY KEY CHECK (id=1), pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0)`,
+      `CREATE TABLE IF NOT EXISTS stats_referrers (dim TEXT PRIMARY KEY, name TEXT DEFAULT '', pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0, last_at TEXT DEFAULT '')`,
+    ]) {
+      try { pgstore.exec(stmt); } catch (e) { console.error('❌ stats 建表失败:', stmt.slice(0, 30), '->', e.message); }
+    }
     pgstore.__pgMode = true;
     db = pgstore;
   } catch (e) {
