@@ -60,7 +60,7 @@ function convertSql(sql, forRun) {
   // （stats_daily / stats_visitors 没有 id 列，跳过，否则整条语句报错）
   if (forRun && /^INSERT/i.test(q.trim()) && !/RETURNING/i.test(q)) {
     const t = q.match(/INSERT\s+INTO\s+"?(\w+)"?/i);
-    if (!t || !/^(stats_daily|stats_visitors)$/i.test(t[1])) {
+    if (!t || !/^(stats_daily|stats_visitors|stats_referrers)$/i.test(t[1])) {
       q = q.trim().replace(/;?\s*$/, '') + ' RETURNING id';
     }
   }
