@@ -310,3 +310,10 @@ td .price { color: var(--danger); font-weight: 700; font-size: 15px; }
 .hl-more { margin-top: 14px; }
 .hl-more a { font-size: 13px; color: #2b7fff; text-decoration: none; font-weight: 600; }
 @media (max-width: 480px) { .hl-item { max-width: 100%; } }
+
+/* 首页友链紧凑胶囊区（样式必须放这里：Vue 挂载会删除 #app 内的 <style> 标签） */
+.flinks { display: flex; flex-wrap: wrap; gap: 6px 8px; background: #fff; border: 1px solid #e5ecf5; border-radius: 12px; padding: 12px; }
+.flink-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #445b78; text-decoration: none; padding: 4px 9px; border-radius: 8px; background: #f6f9fd; border: 1px solid #eef3fa; max-width: 160px; transition: .15s; }
+.flink-item:hover { color: #2b7fff; border-color: #bcd7ff; background: #eef5ff; }
+.flink-item img { width: 15px; height: 15px; border-radius: 3px; object-fit: contain; flex-shrink: 0; }
+.flink-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

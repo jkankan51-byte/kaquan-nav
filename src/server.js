@@ -58,14 +58,8 @@ function homeLinksSection(links) {
       `<img src="/api/favicon?domain=${encodeURIComponent(d)}" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'" alt="" />` +
       `<span>${escHtml(l.name)}</span></a>`;
   }).join('');
+  // 注意：样式不能内联在此处（注入点在 #app 内，Vue 挂载时会删除 <style> 标签），统一放 style.css
   return `<div class="section">
-        <style>
-        .flinks{display:flex;flex-wrap:wrap;gap:6px 8px;background:#fff;border:1px solid #e5ecf5;border-radius:12px;padding:12px}
-        .flink-item{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#445b78;text-decoration:none;padding:4px 9px;border-radius:8px;background:#f6f9fd;border:1px solid #eef3fa;max-width:160px;transition:.15s}
-        .flink-item:hover{color:#2b7fff;border-color:#bcd7ff;background:#eef5ff}
-        .flink-item img{width:15px;height:15px;border-radius:3px;object-fit:contain;flex-shrink:0}
-        .flink-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        </style>
         <div class="section-head">
           <div class="section-title">🔗 友情链接</div>
           <a class="section-more" href="/directory">更多友链 →</a>
