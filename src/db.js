@@ -143,6 +143,11 @@ if (PG_MODE) {
     ]) {
       try { pgstore.exec(stmt); } catch (e) { console.error('❌ stats 建表失败:', stmt.slice(0, 30), '->', e.message); }
     }
+    // 幂等补列：stats_visitors 记录 IP 与最近访问时间
+    for (const col of [`ALTER TABLE stats_visitors ADD COLUMN IF NOT EXISTS ip TEXT DEFAULT ''`,
+                       `ALTER TABLE stats_visitors ADD COLUMN IF NOT EXISTS last_at TEXT DEFAULT ''`]) {
+      try { pgstore.exec(col); } catch (_) {}
+    }
     pgstore.__pgMode = true;
     db = pgstore;
   } catch (e) {
@@ -160,6 +165,7 @@ if (!db) {
   for (const col of ALTER_COLS_SITES) { try { db.exec(`ALTER TABLE sites ADD COLUMN ${col};`); } catch (_) {} }
   for (const col of ALTER_COLS_LINKS) { try { db.exec(`ALTER TABLE links ADD COLUMN ${col};`); } catch (_) {} }
   db.exec(DDL_STATS);
+  for (const col of ['ip', 'last_at']) { try { db.exec(`ALTER TABLE stats_visitors ADD COLUMN ${col} TEXT DEFAULT '';`); } catch (_) {} }
 }
 
 // 历史数据兼容：存量友链视为已通过；清理示例假数据

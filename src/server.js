@@ -276,12 +276,12 @@ app.post('/api/admin/login', (req, res) => {
 
 // ==================== 访问统计 / 点击量 ====================
 
-// 实时在线：内存 Map（visitor -> 最后活跃时间），5 分钟内有心跳即算在线
+// 实时在线：内存 Map（visitor -> {t 最后活跃, ip, dim 来源}），5 分钟内有心跳即算在线
 const presence = new Map();
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 setInterval(() => {
   const cutoff = Date.now() - ONLINE_WINDOW_MS;
-  for (const [k, t] of presence) if (t < cutoff) presence.delete(k);
+  for (const [k, v] of presence) if (v.t < cutoff) presence.delete(k);
 }, 60 * 1000).unref();
 
 // Render 服务器时区是 UTC，统一加 8 小时换算成北京时间
@@ -306,18 +306,20 @@ app.post('/api/track', (req, res) => {
   }
   if (/^[a-f0-9-]{8,64}$/i.test(visitor)) {
     const d = today();
-    presence.set(visitor, Date.now());
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || '';
+    presence.set(visitor, { t: Date.now(), ip, dim });
+    const nowStr = nowBJ();
     // 先查是否存在再插入（兼容 SQLite/PG，避免 SQLite 专用 changes()）
     const existed = db.prepare('SELECT 1 AS c FROM stats_visitors WHERE day=? AND visitor=?').get(d, visitor);
     const isNew = !existed;
     db.prepare('INSERT OR IGNORE INTO stats_visitors (day, visitor) VALUES (?,?)').run(d, visitor);
+    db.prepare('UPDATE stats_visitors SET ip=?, last_at=? WHERE day=? AND visitor=?').run(ip, nowStr, d, visitor);
     db.prepare(`INSERT INTO stats_daily (day, pv, uv) VALUES (?,1,?)
                 ON CONFLICT(day) DO UPDATE SET pv = stats_daily.pv + 1, uv = stats_daily.uv + ?`)
       .run(d, isNew ? 1 : 0, isNew ? 1 : 0);
     db.prepare('UPDATE stats_total SET pv = pv + 1, uv = uv + ? WHERE id = 1').run(isNew ? 1 : 0);
     // 来源归因写入：先 UPDATE（存在则累加）后 INSERT（不存在则建，catch 兜底并发冲突）
     if (dim) {
-      const nowStr = nowBJ();
       db.prepare('UPDATE stats_referrers SET pv = pv + 1, uv = uv + ?, name = ?, last_at = ? WHERE dim = ?')
         .run(isNew ? 1 : 0, name, nowStr, dim);
       try {
@@ -346,6 +348,24 @@ app.get('/api/stats', (req, res) => {
   };
   statsCacheAt = Date.now();
   res.json(statsCache);
+});
+
+// 后台：最近访客明细（含 IP 与在线状态）
+app.get('/api/admin/visitors', adminAuth, (req, res) => {
+  const d = today();
+  const rows = db.prepare('SELECT visitor, ip, last_at FROM stats_visitors WHERE day=? ORDER BY last_at DESC LIMIT 50').all(d);
+  res.json({ visitors: rows.map(r => ({ ...r, online: presence.has(r.visitor) })) });
+});
+
+// 后台：清零全部统计数据（清除测试/爬虫等虚假数据，不可恢复）
+app.post('/api/admin/stats/reset', adminAuth, (req, res) => {
+  db.prepare('DELETE FROM stats_daily').run();
+  db.prepare('DELETE FROM stats_visitors').run();
+  db.prepare('DELETE FROM stats_referrers').run();
+  db.prepare('UPDATE stats_total SET pv = 0, uv = 0 WHERE id = 1').run();
+  presence.clear();
+  statsCache = null;
+  res.json({ ok: true });
 });
 
 // 站点点击量 +1（点击"前往/直达"时由前端调用）

@@ -263,6 +263,25 @@ body { background: #eef4fb; }
           </tbody>
         </table>
       </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px">
+        <h3 style="margin:0;font-size:15px">最近访客（含 IP）</h3>
+        <button style="background:#fff1f0;border:1px solid #ffccc7;color:#cf1322;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer" @click="resetStats">清零统计数据</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>IP</th><th>访客标识</th><th>状态</th><th>最近访问</th></tr></thead>
+          <tbody>
+            <tr v-for="v in visitors" :key="v.visitor">
+              <td><b>{{ v.ip || '未知' }}</b></td>
+              <td style="font-family:monospace">{{ v.visitor.slice(0, 8) }}</td>
+              <td><span v-if="v.online" style="color:#1a7f43;font-weight:600">● 在线</span><span v-else style="color:#8a99ad">○ 离开</span></td>
+              <td>{{ v.last_at || '—' }}</td>
+            </tr>
+            <tr v-if="!visitors.length"><td colspan="4" style="color:#8a99ad;text-align:center;padding:24px">暂无访客记录</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ===== 举报/反馈 ===== -->
@@ -441,11 +460,24 @@ createApp({
     const origin = location.origin;
     const stats = reactive({ online: 0, today_pv: 0, today_uv: 0, total_pv: 0, total_uv: 0 });
     const referrers = ref([]);
+    const visitors = ref([]);
     async function loadStats() {
       try {
         const s = await api('/api/stats');
         Object.assign(stats, s);
         referrers.value = s.referrers || [];
+      } catch (_) {}
+      try {
+        const r = await api('/api/admin/visitors');
+        visitors.value = r.visitors || [];
+      } catch (_) {}
+    }
+    async function resetStats() {
+      if (!confirm('确定清零全部统计数据？浏览量/访客/来源记录将全部删除，不可恢复。')) return;
+      try {
+        await api('/api/admin/stats/reset', { method: 'POST' });
+        showToast('统计数据已清零');
+        loadStats();
       } catch (_) {}
     }
     function refName(r) {
@@ -482,7 +514,7 @@ createApp({
       crawler, failOnly, loadLogs,
       announcements, annForm, saveAnn, banners, banForm, saveBanner,
       links, linkForm, saveLink, reviewLink, fetchLinkTdk, editAnn, editBan, editLink, reports, resolveReport, delItem, switchTab,
-      origin, stats, referrers, loadStats, refName, refType, copyLink
+      origin, stats, referrers, loadStats, refName, refType, copyLink, visitors, resetStats
     };
   }
 }).mount('#app');
