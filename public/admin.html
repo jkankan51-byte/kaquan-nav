@@ -216,10 +216,11 @@ body { background: #eef4fb; }
       </div>
       <div class="table-wrap" style="box-shadow:none">
         <table>
-          <thead><tr><th>ID</th><th>名称</th><th>链接</th><th>状态</th><th>启用</th><th>操作</th></tr></thead>
+          <thead><tr><th>ID</th><th>名称</th><th>链接</th><th>本站入口（发给对方放友链）</th><th>状态</th><th>启用</th><th>操作</th></tr></thead>
           <tbody>
             <tr v-for="l in links" :key="l.id">
               <td>{{ l.id }}</td><td><b>{{ l.name }}</b></td><td>{{ l.url }}</td>
+              <td><code style="font-size:11px;background:#f3f6fb;padding:2px 6px;border-radius:4px">{{ origin }}/?from=link_{{ l.id }}</code><br><button class="btn btn-ghost" style="padding:2px 8px;font-size:11px;margin-top:4px" @click="copyLink(l.id)">复制</button></td>
               <td><span :class="l.status==='pending' ? 'tag-warn' : ''">{{ l.status==='pending' ? '⏳ 待审' : '✅ 通过' }}</span></td>
               <td>{{ l.enabled ? '✅' : '—' }}</td>
               <td>
@@ -230,6 +231,34 @@ body { background: #eef4fb; }
                 <span class="op-btn op-del" @click="delItem('links', l.id)">删除</span>
               </td>
             </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 访问统计 ===== -->
+    <div class="admin-panel" v-if="tab==='stats'">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+        <div style="flex:1;min-width:120px;background:#f6fafe;border:1px solid #eaf1fb;border-radius:12px;padding:14px 16px"><div style="font-size:24px;font-weight:700;color:#2b7fff">{{ stats.online }}</div><div style="font-size:12px;color:#8a99ad">当前在线</div></div>
+        <div style="flex:1;min-width:120px;background:#f6fafe;border:1px solid #eaf1fb;border-radius:12px;padding:14px 16px"><div style="font-size:24px;font-weight:700;color:#2b7fff">{{ stats.today_pv }}</div><div style="font-size:12px;color:#8a99ad">今日浏览(PV)</div></div>
+        <div style="flex:1;min-width:120px;background:#f6fafe;border:1px solid #eaf1fb;border-radius:12px;padding:14px 16px"><div style="font-size:24px;font-weight:700;color:#2b7fff">{{ stats.today_uv }}</div><div style="font-size:12px;color:#8a99ad">今日访客(UV)</div></div>
+        <div style="flex:1;min-width:120px;background:#f6fafe;border:1px solid #eaf1fb;border-radius:12px;padding:14px 16px"><div style="font-size:24px;font-weight:700;color:#2b7fff">{{ stats.total_pv }}</div><div style="font-size:12px;color:#8a99ad">累计浏览</div></div>
+        <div style="flex:1;min-width:120px;background:#f6fafe;border:1px solid #eaf1fb;border-radius:12px;padding:14px 16px"><div style="font-size:24px;font-weight:700;color:#2b7fff">{{ stats.total_uv }}</div><div style="font-size:12px;color:#8a99ad">累计访客</div></div>
+      </div>
+      <h3 style="margin:6px 0 8px;font-size:15px">访问来源（友链 / 外部域名 / 直访）</h3>
+      <p style="color:#8a99ad;font-size:13px;margin-bottom:12px">通过"友链管理"里的<b>本站入口地址</b>进来的访客会精确归因到对应友链。PV=访问次数，UV=独立访客（按浏览器去重）。</p>
+      <div class="table-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>来源</th><th>类型</th><th>浏览量(PV)</th><th>访客(UV)</th><th>最近访问</th></tr></thead>
+          <tbody>
+            <tr v-for="r in referrers" :key="r.dim">
+              <td><b>{{ refName(r) }}</b></td>
+              <td>{{ refType(r) }}</td>
+              <td>{{ r.pv }}</td>
+              <td>{{ r.uv }}</td>
+              <td>{{ r.last_at || '—' }}</td>
+            </tr>
+            <tr v-if="!referrers.length"><td colspan="5" style="color:#8a99ad;text-align:center;padding:24px">暂无来源数据，有人通过带标记的友链访问后会出现在这里</td></tr>
           </tbody>
         </table>
       </div>
@@ -268,6 +297,7 @@ createApp({
       { key: 'announcements', name: '公告管理' },
       { key: 'banners', name: '广告横幅' },
       { key: 'links', name: '友链管理' },
+      { key: 'stats', name: '访问统计' },
       { key: 'reports', name: '举报/反馈' }
     ];
     const token = ref(localStorage.getItem('admin_token') || '');
@@ -397,7 +427,33 @@ createApp({
     async function resolveReport(id) { await api(`/api/admin/reports/${id}/resolve`, { method: 'POST' }); showToast('已标记处理'); loadReports(); }
 
     // 通用删除
-    const MAP = { announcements: loadAnns, banners: loadBanners, links: loadLinks };
+    // 访问统计
+    const origin = location.origin;
+    const stats = reactive({ online: 0, today_pv: 0, today_uv: 0, total_pv: 0, total_uv: 0 });
+    const referrers = ref([]);
+    async function loadStats() {
+      try {
+        const s = await api('/api/stats');
+        Object.assign(stats, s);
+        referrers.value = s.referrers || [];
+      } catch (_) {}
+    }
+    function refName(r) {
+      if (r.dim.startsWith('link:')) return r.name || ('友链 #' + r.dim.slice(5));
+      if (r.dim === 'direct') return '直接访问 / 书签';
+      return r.dim.replace(/^ref:/, '');
+    }
+    function refType(r) {
+      if (r.dim.startsWith('link:')) return '🤝 友链';
+      if (r.dim === 'direct') return '🔵 直访';
+      return '🌐 外部域名';
+    }
+    function copyLink(id) {
+      const u = origin + '/?from=link_' + id;
+      navigator.clipboard.writeText(u).then(() => showToast('已复制入口地址：' + u)).catch(() => showToast('复制失败，请手动复制：' + u, true));
+    }
+
+    const MAP = { announcements: loadAnns, banners: loadBanners, links: loadLinks, stats: loadStats };
     async function delItem(kind, id) {
       if (!confirm('确定删除？')) return;
       await api(`/api/admin/${kind}/${id}`, { method: 'DELETE' });
@@ -415,7 +471,8 @@ createApp({
       submissions, review, rejectWithReason,
       crawler, failOnly, loadLogs,
       announcements, annForm, saveAnn, banners, banForm, saveBanner,
-      links, linkForm, saveLink, reviewLink, fetchLinkTdk, reports, resolveReport, delItem, switchTab
+      links, linkForm, saveLink, reviewLink, fetchLinkTdk, reports, resolveReport, delItem, switchTab,
+      origin, stats, referrers, loadStats, refName, refType, copyLink
     };
   }
 }).mount('#app');

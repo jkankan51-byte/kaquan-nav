@@ -288,9 +288,22 @@ setInterval(() => {
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
-// 上报访问（前端每次进入页面调用）
+// 上报访问（前端每次进入页面调用），并归因来源
 app.post('/api/track', (req, res) => {
-  const visitor = String((req.body || {}).visitor || '').slice(0, 64);
+  const body = req.body || {};
+  const visitor = String(body.visitor || '').slice(0, 64);
+  // 来源归因：优先专属反链 from=link_<id>，其次浏览器 referer 域名，否则直访
+  let dim = 'direct', name = '';
+  const from = String(body.from || '').trim().toLowerCase();
+  const ref = String(body.ref || '').trim().toLowerCase().replace(/^www\./, '');
+  if (/^link_\d+$/.test(from)) {
+    const lid = parseInt(from.split('_')[1], 10);
+    const lnk = db.prepare('SELECT id,name FROM links WHERE id=?').get(lid);
+    if (lnk) { dim = 'link:' + lid; name = lnk.name; }
+    else if (ref) dim = 'ref:' + ref;
+  } else if (ref) {
+    dim = 'ref:' + ref;
+  }
   if (/^[a-f0-9-]{8,64}$/i.test(visitor)) {
     const d = today();
     presence.set(visitor, Date.now());
@@ -302,19 +315,29 @@ app.post('/api/track', (req, res) => {
                 ON CONFLICT(day) DO UPDATE SET pv = stats_daily.pv + 1, uv = stats_daily.uv + ?`)
       .run(d, isNew ? 1 : 0, isNew ? 1 : 0);
     db.prepare('UPDATE stats_total SET pv = pv + 1, uv = uv + ? WHERE id = 1').run(isNew ? 1 : 0);
+    // 来源归因写入（兼容 SQLite/PG 的 upsert 语法）
+    if (dim) {
+      const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      db.prepare(`INSERT INTO stats_referrers (dim, name, pv, uv, last_at)
+                  VALUES (?,?,1,?,?) ON CONFLICT(dim) DO UPDATE
+                  SET pv = stats_referrers.pv + 1, uv = stats_referrers.uv + ?, name = excluded.name, last_at = ?`)
+        .run(dim, name, isNew ? 1 : 0, nowStr, isNew ? 1 : 0, nowStr);
+    }
   }
   res.json({ ok: true });
 });
 
-// 统计数据（首页展示）
+// 统计数据（首页展示 + 后台来源面板）
 app.get('/api/stats', (req, res) => {
   const d = today();
   const day = db.prepare('SELECT pv, uv FROM stats_daily WHERE day=?').get(d) || { pv: 0, uv: 0 };
   const total = db.prepare('SELECT pv, uv FROM stats_total WHERE id=1').get() || { pv: 0, uv: 0 };
+  const referrers = db.prepare('SELECT dim, name, pv, uv, last_at FROM stats_referrers ORDER BY pv DESC LIMIT 30').all();
   res.json({
     online: presence.size,
     today_pv: day.pv, today_uv: day.uv,
-    total_pv: total.pv, total_uv: total.uv
+    total_pv: total.pv, total_uv: total.uv,
+    referrers
   });
 });
 

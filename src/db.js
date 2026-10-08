@@ -106,6 +106,13 @@ CREATE TABLE IF NOT EXISTS stats_total (     -- 累计总量（单行）
   pv INTEGER DEFAULT 0,
   uv INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS stats_referrers ( -- 访问来源归因（友链 / 外部域名 / 直访）
+  dim TEXT PRIMARY KEY,                       -- 'link:3' / 'ref:example.com' / 'direct'
+  name TEXT DEFAULT '',
+  pv INTEGER DEFAULT 0,
+  uv INTEGER DEFAULT 0,
+  last_at TEXT DEFAULT ''
+);
 `;
 
 const ALTER_COLS_SITES = ['clicks INTEGER DEFAULT 0', 'recommended INTEGER DEFAULT 1'];
@@ -127,6 +134,8 @@ if (PG_MODE) {
     // PG 已有数据时 doMigrate 会跳过 DDL，这里幂等补列（PG 支持 IF NOT EXISTS）
     for (const col of ALTER_COLS_SITES) { try { pgstore.exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
     for (const col of ALTER_COLS_LINKS) { try { pgstore.exec(`ALTER TABLE links ADD COLUMN IF NOT EXISTS ${col};`); } catch (_) {} }
+    // 幂等建来源统计表（doMigrate 在 PG 已有数据时会跳过整个 DDL）
+    try { pgstore.exec(`CREATE TABLE IF NOT EXISTS stats_referrers (dim TEXT PRIMARY KEY, name TEXT DEFAULT '', pv INTEGER DEFAULT 0, uv INTEGER DEFAULT 0, last_at TEXT DEFAULT '')`); } catch (_) {}
     pgstore.__pgMode = true;
     db = pgstore;
   } catch (e) {

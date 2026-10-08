@@ -499,7 +499,13 @@ createApp({
     const VID_KEY = 'kqnav_vid';
     let vid = localStorage.getItem(VID_KEY);
     if (!vid) { vid = crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2); localStorage.setItem(VID_KEY, vid); }
-    async function trackVisit() { try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visitor: vid }) }); } catch (_) {} }
+    function getParam(name) { const m = location.search.match(new RegExp('[?&]' + name + '=([^&]*)')); return m ? decodeURIComponent(m[1]) : ''; }
+    async function trackVisit() {
+      const from = getParam('from'); // 友链专属反链标识，如 link_3
+      let ref = '';
+      try { if (document.referrer) ref = new URL(document.referrer).hostname.replace(/^www\./, ''); } catch (_) {}
+      try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visitor: vid, from, ref }) }); } catch (_) {}
+    }
     async function loadStats() { try { Object.assign(stats, await fetch('/api/stats').then(r => r.json())); } catch (_) {} }
     function addClick(siteId) { if (siteId) fetch(`/api/sites/${siteId}/click`, { method: 'POST' }).catch(() => {}); }
 
