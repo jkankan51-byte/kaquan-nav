@@ -460,7 +460,7 @@ createApp({
       showToast('已删除'); MAP[kind]();
     }
 
-    function switchTab(k) { tab.value = k; ({ sites: loadSites, submissions: loadSubs, crawler: loadLogs, announcements: loadAnns, banners: loadBanners, links: loadLinks, reports: loadReports })[k](); }
+    function switchTab(k) { tab.value = k; ({ sites: loadSites, submissions: loadSubs, crawler: loadLogs, announcements: loadAnns, banners: loadBanners, links: loadLinks, stats: loadStats, reports: loadReports })[k](); }
     function loadAll() { loadSites(); }
 
     onMounted(() => { if (token.value) loadAll(); });
