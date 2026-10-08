@@ -16,10 +16,14 @@ const db = require('./db');
 
 // ---------------- 易变配置（拿到真实文档后集中修改此处） ----------------
 const CONFIG = {
-  baseUrl: (process.env.KAYIXIN_BASE_URL || '').replace(/\/+$/, ''),  // 卡易信接口域名（测试/正式）
+  baseUrl: (process.env.KAYIXIN_BASE_URL || '').replace(/\/+$/, ''),  // 卡易信接口域名（测试/正式），如 https://tysqu.com
   appKey: process.env.KAYIXIN_APPKEY || '',                            // 卡易信 APPKEY
   appSecret: process.env.KAYIXIN_APPSECRET || '',                      // 卡易信 APPSECRET
   timeoutMs: 15000,
+  // 卡易信 API 3.0 文档明确：「请求head字段」指 HTTP 请求头（非 body 内字段），body 为纯业务 json。
+  // 故默认把 appKey / timestamp / sign 放 HTTP 请求头；如真实文档是放 body，把 authInHeader 改 false 即可。
+  authInHeader: true,
+  headers: { appKey: 'AppKey', timestamp: 'Timestamp', sign: 'Sign' },  // 请求头名称，按真实文档调整
 };
 
 // 各接口路径（待核对）
@@ -87,16 +91,25 @@ async function request(apiPath, { method = 'POST', data = {} } = {}) {
     throw new Error('卡易信未配置：请在环境变量设置 KAYIXIN_BASE_URL / KAYIXIN_APPKEY / KAYIXIN_APPSECRET');
   }
   const timestamp = ts();
-  const signed = { ...data, appKey: CONFIG.appKey, timestamp };
-  signed.sign = sign(signed);
+  // 签名：鉴权参数 + 业务参数按 key 升序拼接，尾部追加 appSecret，32 位大写 MD5
+  const signStr = sign({ appKey: CONFIG.appKey, timestamp, ...data });
   const url = CONFIG.baseUrl + apiPath;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), CONFIG.timeoutMs);
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    let bodyData = data;
+    if (CONFIG.authInHeader) {
+      headers[CONFIG.headers.appKey] = CONFIG.appKey;
+      headers[CONFIG.headers.timestamp] = String(timestamp);
+      headers[CONFIG.headers.sign] = signStr;
+    } else {
+      bodyData = { ...data, appKey: CONFIG.appKey, timestamp, sign: signStr };
+    }
     const resp = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: method === 'GET' ? undefined : JSON.stringify(signed),
+      headers,
+      body: method === 'GET' ? undefined : JSON.stringify(bodyData),
       signal: ctrl.signal,
     });
     const text = await resp.text();
