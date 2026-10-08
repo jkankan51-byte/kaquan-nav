@@ -284,7 +284,9 @@ setInterval(() => {
   for (const [k, t] of presence) if (t < cutoff) presence.delete(k);
 }, 60 * 1000).unref();
 
-function today() { return new Date().toISOString().slice(0, 10); }
+// Render 服务器时区是 UTC，统一加 8 小时换算成北京时间
+function today() { return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); }
+function nowBJ() { return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' '); }
 
 // 上报访问（前端每次进入页面调用），并归因来源
 app.post('/api/track', (req, res) => {
@@ -315,7 +317,7 @@ app.post('/api/track', (req, res) => {
     db.prepare('UPDATE stats_total SET pv = pv + 1, uv = uv + ? WHERE id = 1').run(isNew ? 1 : 0);
     // 来源归因写入：先 UPDATE（存在则累加）后 INSERT（不存在则建，catch 兜底并发冲突）
     if (dim) {
-      const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const nowStr = nowBJ();
       db.prepare('UPDATE stats_referrers SET pv = pv + 1, uv = uv + ?, name = ?, last_at = ? WHERE dim = ?')
         .run(isNew ? 1 : 0, name, nowStr, dim);
       try {
