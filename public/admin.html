@@ -8,6 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css">
 <style>
+[v-cloak]{display:none!important}
 body { background: #eef4fb; }
 .admin-wrap { max-width: 1180px; margin: 0 auto; padding: 16px 14px 40px; }
 .admin-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
@@ -286,6 +287,10 @@ body { background: #eef4fb; }
 
 <script src="/vendor/vue.global.prod.js"></script>
 <script>
+  if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"><\/script>');
+  if (!window.Vue) document.write('<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"><\/script>');
+</script>
+<script>
 const { createApp, ref, reactive, onMounted } = Vue;
 createApp({
   setup() {
@@ -300,7 +305,8 @@ createApp({
       { key: 'stats', name: '访问统计' },
       { key: 'reports', name: '举报/反馈' }
     ];
-    const token = ref(localStorage.getItem('admin_token') || '');
+    let savedToken = ''; try { savedToken = localStorage.getItem('admin_token') || ''; } catch (_) {}
+    const token = ref(savedToken);
     const tab = ref('sites');
     const toast = ref(''), toastType = ref('');
     let toastTimer;

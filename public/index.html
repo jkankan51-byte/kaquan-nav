@@ -15,6 +15,7 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="referrer" content="always">
+<style>[v-cloak]{display:none!important}</style>
 <link rel="stylesheet" href="/style.css">
 <script type="application/ld+json">
 {
@@ -407,6 +408,11 @@
 
 <script src="/vendor/vue.global.prod.js"></script>
 <script>
+  // 本地 Vue 加载失败时（网络波动），自动回退到公共 CDN，双重兜底
+  if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"><\/script>');
+  if (!window.Vue) document.write('<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"><\/script>');
+</script>
+<script>
 const { createApp, ref, reactive, onMounted } = Vue;
 
 createApp({
@@ -497,8 +503,9 @@ createApp({
     const stats = reactive({ online: 0, today_pv: 0, today_uv: 0, total_pv: 0, total_uv: 0 });
     const fmt = n => (+n || 0).toLocaleString('zh-CN');
     const VID_KEY = 'kqnav_vid';
-    let vid = localStorage.getItem(VID_KEY);
-    if (!vid) { vid = crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2); localStorage.setItem(VID_KEY, vid); }
+    let vid = '';
+    try { vid = localStorage.getItem(VID_KEY) || ''; } catch (_) {}
+    if (!vid) { vid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2); try { localStorage.setItem(VID_KEY, vid); } catch (_) {} }
     function getParam(name) { const m = location.search.match(new RegExp('[?&]' + name + '=([^&]*)')); return m ? decodeURIComponent(m[1]) : ''; }
     async function trackVisit() {
       const from = getParam('from'); // 友链专属反链标识，如 link_3
@@ -639,6 +646,21 @@ createApp({
     };
   }
 }).mount('#app');
+window.__KQ_MOUNTED = true;   // 挂载成功标记，供下方加载失败兜底检测
 </script>
+<script>
+  // 6 秒后仍未挂载成功（Vue 彻底加载失败），给出友好提示而非裸模板
+  setTimeout(function () {
+    if (!window.__KQ_MOUNTED) {
+      var el = document.getElementById('boot-fail');
+      if (el) el.style.display = 'flex';
+    }
+  }, 6000);
+</script>
+<div id="boot-fail" style="display:none;position:fixed;inset:0;z-index:9999;background:#f5f7fb;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:system-ui,-apple-system,sans-serif;color:#334;">
+  <div style="font-size:17px;font-weight:600">页面资源加载失败</div>
+  <div style="font-size:14px;color:#889">可能是网络波动导致的，请刷新重试</div>
+  <button onclick="location.reload()" style="padding:10px 32px;border:none;border-radius:8px;background:#3b5bfd;color:#fff;font-size:15px">刷新页面</button>
+</div>
 </body>
 </html>
